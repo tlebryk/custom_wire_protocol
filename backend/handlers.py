@@ -213,8 +213,8 @@ def handle_client_connection(conn, addr):
                     conn,
                     {"message": "Messages marked as read.", "action": "mark_as_read"},
                 )
-                success = delete_account(username)
             elif action == "delete_account":
+                success = delete_account(username)
                 if success:
                     send_success(conn, {"message": "Account deleted successfully."})
                     conn.close()

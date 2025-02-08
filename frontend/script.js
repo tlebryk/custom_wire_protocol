@@ -27,9 +27,10 @@ ws.onmessage = function (event) {
             isAuthenticated = true;
             document.getElementById('authBox').classList.add('hidden');
             document.getElementById('chatBox').classList.remove('hidden');
-        } else if (data.from && data.message) {
-            appendChatMessage(data.from, data.message, "received", data.timestamp);
         }
+        //  else if (data.from && data.message) {
+        //     appendChatMessage(data.from, data.message, "received", data.timestamp);
+        // }
     } else if (data.status === "error") {
         console.log("Error:", data.message);
     }
@@ -84,7 +85,8 @@ function sendMessage() {
         alert("Please enter a message.");
         return;
     }
-    const msgPayload = { action: "send_message", message: messageText };
+    // TODO: undo this hardcode
+    const msgPayload = { action: "send_message", message: messageText, 'sender': 'asd', 'receiver': 'sdf' };
     ws.send(JSON.stringify(msgPayload));
     appendChatMessage("You", messageText, "sent", new Date().toISOString());
     document.getElementById('messageText').value = "";

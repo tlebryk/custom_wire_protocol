@@ -1,8 +1,10 @@
 import json
+import logging
 from utils import read_ws_frame, send_ws_frame, perform_handshake
 from users import register_user, authenticate_user
 from database import insert_message, get_recent_messages
-from datetime import datetime 
+from datetime import datetime
+
 
 def handle_client_connection(conn, addr):
     """
@@ -47,7 +49,9 @@ def handle_client_connection(conn, addr):
                 reg_username = data.get("username")
                 reg_password = data.get("password")
                 if not reg_username or not reg_password:
-                    send_error(conn, "Username and password are required for registration.")
+                    send_error(
+                        conn, "Username and password are required for registration."
+                    )
                     continue
 
                 success, message = register_user(reg_username, reg_password)
@@ -68,17 +72,17 @@ def handle_client_connection(conn, addr):
                 if success:
                     authenticated = True
                     username = login_username
-                    send_success(conn, {"message": f"Login successful. Welcome, {username}!"})
-                    
+                    send_success(
+                        conn, {"message": f"Login successful. Welcome, {username}!"}
+                    )
+                    print("MADE IT HERE")
                     # Retrieve recent messages and send to the user
-                    recent_msgs = get_recent_messages(limit=50)
+                    recent_msgs = get_recent_messages(username, limit=50)
+                    print("MADE IT HERE 2")
+
                     formatted_msgs = [
-                        {
-                            "from": sender,
-                            "message": content,
-                            "timestamp": timestamp
-                        }
-                        for sender, content, timestamp in recent_msgs
+                        {"from": sender, "message": content, "timestamp": timestamp}
+                        for sender, content, receiver, timestamp in recent_msgs
                     ]
                     send_recent_messages(conn, formatted_msgs)
                 else:
@@ -89,21 +93,21 @@ def handle_client_connection(conn, addr):
                 if not authenticated:
                     send_error(conn, "Authentication required. Please log in first.")
                     continue
-
+                receiver = data.get("receiver", "user")
                 message_text = data.get("message", "")
                 if not message_text:
                     send_error(conn, "Empty message cannot be sent.")
                     continue
 
                 # Insert the message into the database
-                insert_message(username, message_text)
+                insert_message(username, message_text, receiver)
 
                 # For demonstration, we'll echo the message back
                 response = {
                     "status": "success",
                     "from": username,
                     "message": message_text,
-                    "timestamp": datetime.utcnow().isoformat() + 'Z'
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
                 }
                 send_ws_frame(conn, response)
 
@@ -117,6 +121,7 @@ def handle_client_connection(conn, addr):
         conn.close()
         print(f"[-] Connection closed for {addr}")
 
+
 def send_success(conn, payload_dict=None):
     """
     Helper to send a JSON response with status=success.
@@ -126,6 +131,7 @@ def send_success(conn, payload_dict=None):
     payload_dict["status"] = "success"
     send_ws_frame(conn, payload_dict)
 
+
 def send_error(conn, message):
     """
     Helper to send a JSON response with status=error.
@@ -133,12 +139,10 @@ def send_error(conn, message):
     payload_dict = {"status": "error", "message": message}
     send_ws_frame(conn, payload_dict)
 
+
 def send_recent_messages(conn, messages):
     """
     Sends recent messages to the client after successful login.
     """
-    payload = {
-        "action": "recent_messages",
-        "messages": messages
-    }
+    payload = {"action": "recent_messages", "messages": messages}
     send_ws_frame(conn, payload)

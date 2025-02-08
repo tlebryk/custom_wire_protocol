@@ -2,11 +2,7 @@ import json
 import logging
 import threading
 from utils import read_ws_frame, send_ws_frame, perform_handshake
-<<<<<<< HEAD
 from users import register_user, authenticate_user, delete_account
-=======
-from users import register_user, authenticate_user
->>>>>>> theo/prototype
 from database import (
     insert_message,
     get_recent_messages,

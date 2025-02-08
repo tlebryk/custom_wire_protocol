@@ -3,78 +3,7 @@
 
 <head>
     <title>WebSocket Chat with Registration and Persistent Messages</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-
-        #authBox,
-        #chatBox {
-            border: 1px solid #ccc;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 5px;
-        }
-
-        #systemMessages {
-            border: 1px solid #ccc;
-            height: 100px;
-            overflow-y: scroll;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            background-color: #f1f1f1;
-        }
-
-        #messages {
-            border: 1px solid #ccc;
-            height: 300px;
-            overflow-y: scroll;
-            padding: 10px;
-            margin-top: 10px;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-        }
-
-        .message {
-            margin-bottom: 10px;
-        }
-
-        .sent {
-            color: blue;
-        }
-
-        .received {
-            color: green;
-        }
-
-        .error {
-            color: red;
-        }
-
-        .success {
-            color: green;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .toggle-link {
-            color: blue;
-            cursor: pointer;
-            text-decoration: underline;
-            margin-top: 10px;
-            display: inline-block;
-        }
-
-        .timestamp {
-            font-size: 0.8em;
-            color: #666;
-            margin-left: 5px;
-        }
-    </style>
+    <link rel="stylesheet" type="text/css" href="styles.css">
 </head>
 
 <body>
@@ -82,44 +11,28 @@
 
     <!-- Authentication Box -->
     <div id="authBox">
-        <!-- Registration Form -->
         <div id="registerForm">
             <h3>Register</h3>
-            <div>
-                <label>Username:</label>
-                <input type="text" id="regUsername" />
-            </div>
-            <div>
-                <label>Password:</label>
-                <input type="password" id="regPassword" />
-            </div>
+            <label>Username:</label>
+            <input type="text" id="regUsername">
+            <label>Password:</label>
+            <input type="password" id="regPassword">
             <button onclick="sendRegistration()">Register</button>
             <div class="toggle-link" onclick="toggleForms()">Already have an account? Login here.</div>
         </div>
 
-        <!-- Login Form (Initially Hidden) -->
         <div id="loginForm" class="hidden">
             <h3>Login</h3>
-            <div>
-                <label>Username:</label>
-                <input type="text" id="loginUsername" />
-            </div>
-            <div>
-                <label>Password:</label>
-                <input type="password" id="loginPassword" />
-            </div>
+            <label>Username:</label>
+            <input type="text" id="loginUsername">
+            <label>Password:</label>
+            <input type="password" id="loginPassword">
             <button onclick="sendLogin()">Login</button>
             <div class="toggle-link" onclick="toggleForms()">Don't have an account? Register here.</div>
         </div>
     </div>
 
-    <!-- System Messages Box -->
-    <!-- <div id="systemMessages" class="hidden">
-        <h3>System Messages</h3>
-        <div id="systemMessagesContent"></div>
-    </div> -->
-
-    <!-- Chat Box (Initially Hidden) -->
+    <!-- Chat Box -->
     <div id="chatBox" class="hidden">
         <h3>Chat</h3>
         <div id="messages"></div>
@@ -127,169 +40,7 @@
         <button onclick="sendMessage()">Send</button>
     </div>
 
-    <script>
-        // Establish WebSocket connection
-        const ws = new WebSocket('ws://localhost:8000/ws');
-        let isAuthenticated = false;
-
-        ws.onopen = function () {
-            console.log("WebSocket connection established.");
-        };
-
-        ws.onmessage = function (event) {
-            console.log("Message from server:", event.data);
-            let data;
-            try {
-                data = JSON.parse(event.data);
-            } catch (err) {
-                // If parsing fails, treat it as a system message
-                return;
-            }
-
-            // Handle different actions from the server
-            if (data.action === "recent_messages") {
-                // Handle recent messages
-                const messages = data.messages;
-                if (Array.isArray(messages)) {
-                    messages.forEach(msg => {
-                        appendChatMessage(msg.from, msg.message, "received", msg.timestamp);
-                    });
-                }
-            }
-            else if (data.status === "success") {
-                if (data.message && data.message.includes("Registration successful")) {
-                    // Registration successful
-                }
-                else if (data.message && data.message.includes("Login successful")) {
-                    // Login successful
-                    isAuthenticated = true;
-                    document.getElementById('authBox').classList.add('hidden');
-                    document.getElementById('chatBox').classList.remove('hidden');
-                    document.getElementById('systemMessages').classList.add('hidden'); // Hide system messages after login
-                }
-                else if (data.message) {
-                    // General success message
-                }
-                else if (data.from && data.message) {
-                    // Message from another user
-                    appendChatMessage(data.from, data.message, "received", data.timestamp);
-                }
-                else {
-                }
-            }
-            else if (data.status === "error") {
-                console.log("Error:", data.message);
-            }
-            else {
-                // Handle unknown statuses
-                console.log("Unknown status:", data.status);
-            }
-        };
-
-        ws.onclose = function () {
-            console.log("WebSocket connection closed.");
-        };
-
-        ws.onerror = function (error) {
-            console.error("WebSocket error:", error);
-        };
-
-        // Toggle between Registration and Login forms
-        function toggleForms() {
-            const regForm = document.getElementById('registerForm');
-            const loginForm = document.getElementById('loginForm');
-            regForm.classList.toggle('hidden');
-            loginForm.classList.toggle('hidden');
-        }
-
-        // Send registration data
-        function sendRegistration() {
-            const username = document.getElementById('regUsername').value.trim();
-            const password = document.getElementById('regPassword').value.trim();
-
-            if (!username || !password) {
-                alert("Please enter both username and password.");
-                return;
-            }
-
-            const regPayload = {
-                action: "register",
-                username: username,
-                password: password
-            };
-
-            ws.send(JSON.stringify(regPayload));
-
-            // Optionally, clear the registration form
-            document.getElementById('regUsername').value = '';
-            document.getElementById('regPassword').value = '';
-        }
-
-        // Send login data
-        function sendLogin() {
-            const username = document.getElementById('loginUsername').value.trim();
-            const password = document.getElementById('loginPassword').value.trim();
-
-            if (!username || !password) {
-                alert("Please enter both username and password.");
-                return;
-            }
-
-            const loginPayload = {
-                action: "login",
-                username: username,
-                password: password
-            };
-
-            ws.send(JSON.stringify(loginPayload));
-
-            // Optionally, clear the login form
-            document.getElementById('loginUsername').value = '';
-            document.getElementById('loginPassword').value = '';
-        }
-
-        // Send a chat message
-        function sendMessage() {
-            if (!isAuthenticated) {
-                alert("You must be logged in to send messages.");
-                return;
-            }
-
-            const messageText = document.getElementById('messageText').value.trim();
-            if (!messageText) {
-                alert("Please enter a message.");
-                return;
-            }
-
-            const msgPayload = {
-                action: "send_message",
-                message: messageText
-            };
-
-            ws.send(JSON.stringify(msgPayload));
-            appendChatMessage("You", messageText, "sent", new Date().toISOString());
-            document.getElementById('messageText').value = "";
-        }
-
-
-
-        // Helper to append chat messages to the "messages" div
-        function appendChatMessage(sender, text, cssClass, timestamp = null) {
-            const messagesDiv = document.getElementById('messages');
-            const newMessage = document.createElement('div');
-            newMessage.classList.add('message', cssClass);
-
-            let timeText = '';
-            if (timestamp) {
-                const date = new Date(timestamp);
-                timeText = `<span class="timestamp">[${date.toLocaleTimeString()}]</span> `;
-            }
-
-            newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}${text}`;
-            messagesDiv.appendChild(newMessage);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 
 </html>

@@ -42,6 +42,9 @@ ws.onmessage = function (event) {
             // Hide authentication and show chat box
             document.getElementById('authBox').classList.add('hidden');
             document.getElementById('chatBox').classList.remove('hidden');
+            document.getElementById('deleteAccountBtn').classList.remove('hidden');
+        } else if (data.from && data.message) {
+            appendChatMessage(data.from, data.message, "received", data.timestamp);
         }
     } else if (data.from && data.message) {
         // Handle real-time incoming messages
@@ -168,3 +171,16 @@ function appendChatMessage(sender, text, cssClass, timestamp = null) {
     messagesDiv.appendChild(newMessage);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
+
+function deleteAccount() {
+    if (!isAuthenticated) {
+        alert("You must be logged in to delete your account.");
+        return;
+    }
+
+    const deletePayload = { action: "delete_account" };
+    ws.send(JSON.stringify(deletePayload));
+    alert("Account deleted. You will be logged out.");
+    location.reload();
+}
+

@@ -60,4 +60,28 @@ def authenticate_user(username, password):
         print(f"[-] Error authenticating user: {e}")
         return False
     finally:
+        conn.close()  
+
+
+def delete_account(username):
+    """
+    Deletes a user and their messages from the database.
+    Returns True if successful, False otherwise.
+    """
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+
+        # Delete the user's messages first (to maintain foreign key constraints)
+        cursor.execute('DELETE FROM messages WHERE sender = ?', (username,))
+        
+        # Delete the user account
+        cursor.execute('DELETE FROM users WHERE username = ?', (username,))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"[-] Error deleting user {username}: {e}")
+        return False
+    finally:
         conn.close()

@@ -2,7 +2,7 @@ import json
 import logging
 import threading
 from utils import read_ws_frame, send_ws_frame, perform_handshake
-from users import register_user, authenticate_user
+from users import register_user, authenticate_user, delete_account
 from database import (
     insert_message,
     get_recent_messages,
@@ -213,6 +213,14 @@ def handle_client_connection(conn, addr):
                     conn,
                     {"message": "Messages marked as read.", "action": "mark_as_read"},
                 )
+                success = delete_account(username)
+            elif action == "delete_account":
+                if success:
+                    send_success(conn, {"message": "Account deleted successfully."})
+                    conn.close()
+                    return  # Disconnect the user after deletion
+                else:
+                    send_error(conn, "Failed to delete account.")
 
             else:
                 # Unrecognized action

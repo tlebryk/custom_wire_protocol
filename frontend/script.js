@@ -153,25 +153,7 @@ function displayError(message) {
     }
 }
 
-// Append chat messages to the messages display area.
-// function appendChatMessage(sender, text, cssClass, timestamp = null) {
-//     const messagesDiv = document.getElementById('messages');
-//     if (!messagesDiv) {
-//         console.error("Messages element not found!");
-//         return;
-//     }
-//     const newMessage = document.createElement('div');
-//     newMessage.classList.add('message', cssClass);
 
-//     let timeText = '';
-//     if (timestamp) {
-//         const date = new Date(timestamp);
-//         timeText = `<span class="timestamp">[${date.toLocaleTimeString()}]</span> `;
-//     }
-//     newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}${text}`;
-//     messagesDiv.appendChild(newMessage);
-//     messagesDiv.scrollTop = messagesDiv.scrollHeight;
-// }
 
 function deleteAccount() {
     if (!isAuthenticated) {

@@ -1,8 +1,8 @@
 
 
 - python 3.10 
-- run python backend/server.py
-- visit frontend/index.html and you can log in. 
+- run `python backend/server.py` to serve the backend. 
+- in the frontend directory, run `python3 -m http.server 8080` to serve the frontend.
 
 
 API specs for actions 

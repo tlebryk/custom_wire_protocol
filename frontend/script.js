@@ -1,7 +1,17 @@
 /* Establish WebSocket connection */
 const ws = new WebSocket('ws://localhost:8000/ws');
-let isAuthenticated = false;
-let lastRegUsername = ""; // stored username from registration attempt
+window.isAuthenticated = false;
+window.lastRegUsername = ""; // stored username from registration attempt
+
+
+import {
+    handleRecentMessages,
+    handleLogin,
+    handleSendMessage,
+    handleErrorMessage,
+    handleDefaultMessage,
+    appendChatMessage
+} from './handlers.js';
 
 // Ensure all functions manipulating the DOM are defined and invoked after the DOM is ready.
 document.addEventListener('DOMContentLoaded', function () {
@@ -14,6 +24,16 @@ document.addEventListener('DOMContentLoaded', function () {
     window.toggleForms = toggleForms;
 });
 
+// Handler Functions
+const handlers = {
+    recent_messages: handleRecentMessages,
+    login: handleLogin,
+    send_message: handleSendMessage,
+    // You can add more handlers here as needed
+    default: handleDefaultMessage
+};
+
+// WebSocket Event Listeners
 ws.onopen = function () {
     console.log("WebSocket connection established.");
 };
@@ -28,46 +48,27 @@ ws.onmessage = function (event) {
         return;
     }
 
-    if (data.action === "recent_messages") {
-        const messages = data.messages;
-        if (Array.isArray(messages)) {
-            messages.forEach(msg => {
-                appendChatMessage(msg.from, msg.message, "received", msg.timestamp);
-            });
-        }
-    } else if (data.action === "login") {
-        if (data.status === "success" && data.message && data.message.includes("Login successful")) {
-            isAuthenticated = true;
-            console.log("login sucessful")
-            // Hide authentication and show chat box
-            document.getElementById('authBox').classList.add('hidden');
-            document.getElementById('chatBox').classList.remove('hidden');
-            document.getElementById('deleteAccountBtn').classList.remove('hidden');
-        } else if (data.from && data.message) {
-            appendChatMessage(data.from, data.message, "received", data.timestamp);
-        }
+    const action = data.action;
+
+    if (action && handlers[action]) {
+        // log the action and the function we're calling 
+        console.log("Received action:", action);
+        // log which hander we're using 
+        console.log("Using handler:", handlers[action]);
+        handlers[action](data);
     } else if (data.from && data.message) {
-        // Handle real-time incoming messages
+        // Handle real-time incoming messages without a specific action
         appendChatMessage(data.from, data.message, "received", data.timestamp);
-    } else if (data.status === "success" && data.message) {
-        // Handle other success messages if necessary
-        console.log("Success:", data.message);
-    } else if (data.status === "error") {
-        // Check for duplicate account message, assuming the error message contains "already"
-        if (data.message.toLowerCase().includes("already")) {
-            // For duplicate registration error, toggle to login and pre-populate the login username field
-            document.getElementById('loginUsername').value = lastRegUsername;
-            // Switch forms if registration form is currently visible
-            if (!document.getElementById('loginForm').classList.contains('hidden')) {
-                // Already in login form, do nothing extra here
-            } else {
-                // Toggle to login form
-                window.toggleForms();
-            }
-            displayError("Account already exists. Please enter your password to login.");
-        } else {
-            displayError(data.message);
+    } else if (data.status) {
+        // Handle status messages that don't have a specific action
+        if (data.status === "success" && data.message) {
+            console.log("Success:", data.message);
+        } else if (data.status === "error") {
+            handleErrorMessage(data);
         }
+    } else {
+        // Fallback for unhandled messages
+        handlers.default(data);
     }
 };
 
@@ -153,24 +154,24 @@ function displayError(message) {
 }
 
 // Append chat messages to the messages display area.
-function appendChatMessage(sender, text, cssClass, timestamp = null) {
-    const messagesDiv = document.getElementById('messages');
-    if (!messagesDiv) {
-        console.error("Messages element not found!");
-        return;
-    }
-    const newMessage = document.createElement('div');
-    newMessage.classList.add('message', cssClass);
+// function appendChatMessage(sender, text, cssClass, timestamp = null) {
+//     const messagesDiv = document.getElementById('messages');
+//     if (!messagesDiv) {
+//         console.error("Messages element not found!");
+//         return;
+//     }
+//     const newMessage = document.createElement('div');
+//     newMessage.classList.add('message', cssClass);
 
-    let timeText = '';
-    if (timestamp) {
-        const date = new Date(timestamp);
-        timeText = `<span class="timestamp">[${date.toLocaleTimeString()}]</span> `;
-    }
-    newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}${text}`;
-    messagesDiv.appendChild(newMessage);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-}
+//     let timeText = '';
+//     if (timestamp) {
+//         const date = new Date(timestamp);
+//         timeText = `<span class="timestamp">[${date.toLocaleTimeString()}]</span> `;
+//     }
+//     newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}${text}`;
+//     messagesDiv.appendChild(newMessage);
+//     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+// }
 
 function deleteAccount() {
     if (!isAuthenticated) {
@@ -183,4 +184,11 @@ function deleteAccount() {
     alert("Account deleted. You will be logged out.");
     location.reload();
 }
+
+
+window.sendRegistration = sendRegistration;
+window.displayError = displayError;
+window.appendChatMessage = appendChatMessage;
+window.sendLogin = sendLogin;
+window.sendMessage = sendMessage;
 

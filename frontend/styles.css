@@ -1,0 +1,70 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+
+#authBox,
+#chatBox {
+    border: 1px solid #ccc;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+}
+
+#systemMessages {
+    border: 1px solid #ccc;
+    height: 100px;
+    overflow-y: scroll;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    background-color: #f1f1f1;
+}
+
+#messages {
+    border: 1px solid #ccc;
+    height: 300px;
+    overflow-y: scroll;
+    padding: 10px;
+    margin-top: 10px;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+.message {
+    margin-bottom: 10px;
+}
+
+.sent {
+    color: blue;
+}
+
+.received {
+    color: green;
+}
+
+.error {
+    color: red;
+}
+
+.success {
+    color: green;
+}
+
+.hidden {
+    display: none;
+}
+
+.toggle-link {
+    color: blue;
+    cursor: pointer;
+    text-decoration: underline;
+    margin-top: 10px;
+    display: inline-block;
+}
+
+.timestamp {
+    font-size: 0.8em;
+    color: #666;
+    margin-left: 5px;
+}

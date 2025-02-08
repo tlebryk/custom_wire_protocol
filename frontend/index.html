@@ -9,6 +9,7 @@
 <body>
     <h1>WebSocket Chat with Registration and Persistent Messages</h1>
     <!-- Authentication Box -->
+    <!-- Authentication Box -->
     <div id="authBox">
         <div id="registerForm">
             <h3>Register</h3>
@@ -29,20 +30,23 @@
             <button onclick="sendLogin()">Login</button>
             <div class="toggle-link" onclick="toggleForms()">Don't have an account? Register here.</div>
         </div>
+
+        <!-- Error Message Box -->
+        <div id="errorBox" class="hidden" style="color: red;"></div>
     </div>
 
-    <!-- Chat Box -->
     <div id="chatBox" class="hidden">
-        <h3>Chat</h3>
         <div id="messages"></div>
-        <input type="text" id="messageText" placeholder="Enter message" style="width: 70%;">
+        <input type="text" id="receiverUsername" placeholder="Receiver Username" />
+        <input type="text" id="messageText" placeholder="Type your message here..." />
         <button onclick="sendMessage()">Send</button>
+        <div id="errorBox" class="hidden"></div>
     </div>
 
     <!-- Delete button -->
-     <div id="deleteAccountBtn" class="hidden">
+    <div id="deleteAccountBtn" class="hidden">
         <button id="deleteAccountBtn" onclick="deleteAccount()">Delete Account</button>
-     </div>
+    </div>
 
     <script src="script.js"></script>
 </body>

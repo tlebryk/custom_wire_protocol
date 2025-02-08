@@ -1,6 +1,6 @@
 import json
 from utils import read_ws_frame, send_ws_frame, perform_handshake
-from users import register_user, authenticate_user
+from users import register_user, authenticate_user, delete_account
 from database import insert_message, get_recent_messages
 from datetime import datetime 
 
@@ -106,6 +106,19 @@ def handle_client_connection(conn, addr):
                     "timestamp": datetime.utcnow().isoformat() + 'Z'
                 }
                 send_ws_frame(conn, response)
+            elif action == "delete_account":
+                if not authenticated:
+                    send_error(conn, "Authentication required. Please log in first.")
+                    continue
+
+                success = delete_account(username)
+                if success:
+                    send_success(conn, {"message": "Account deleted successfully."})
+                    conn.close()
+                    return  # Disconnect the user after deletion
+                else:
+                    send_error(conn, "Failed to delete account.")
+
 
             else:
                 # Unrecognized action
@@ -142,3 +155,5 @@ def send_recent_messages(conn, messages):
         "messages": messages
     }
     send_ws_frame(conn, payload)
+
+

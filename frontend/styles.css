@@ -11,6 +11,13 @@ body {
     border-radius: 5px;
 }
 
+#deleteAccountBtn {
+    color: red;
+    cursor: pointer;
+    border-radius: 5px;
+    padding: 5px;
+}
+
 #systemMessages {
     border: 1px solid #ccc;
     height: 100px;

@@ -1,9 +1,23 @@
 import json
 import logging
+import threading
 from utils import read_ws_frame, send_ws_frame, perform_handshake
 from users import register_user, authenticate_user
-from database import insert_message, get_recent_messages
+from database import (
+    insert_message,
+    get_recent_messages,
+    get_undelivered_messages,
+    mark_messages_delivered,
+    get_unread_messages,
+    mark_messages_as_read,
+)
 from datetime import datetime
+
+# Global dictionary to track online users
+# Key: username, Value: connection object
+online_users = {}
+# Lock for thread-safe operations on online_users
+online_users_lock = threading.Lock()
 
 
 def handle_client_connection(conn, addr):
@@ -56,7 +70,7 @@ def handle_client_connection(conn, addr):
 
                 success, message = register_user(reg_username, reg_password)
                 if success:
-                    send_success(conn, {"message": message})
+                    send_success(conn, {"message": message, action: "register"})
                 else:
                     send_error(conn, message)
 
@@ -73,18 +87,51 @@ def handle_client_connection(conn, addr):
                     authenticated = True
                     username = login_username
                     send_success(
-                        conn, {"message": f"Login successful. Welcome, {username}!"}
+                        conn,
+                        {
+                            "message": f"Login successful. Welcome, {username}!",
+                            "action": "login",
+                        },
                     )
-                    print("MADE IT HERE")
-                    # Retrieve recent messages and send to the user
-                    recent_msgs = get_recent_messages(username, limit=50)
-                    print("MADE IT HERE 2")
+                    print(f"User '{username}' authenticated.")
 
+                    # Add user to online_users
+                    with online_users_lock:
+                        online_users[username] = conn
+                        print(f"User '{username}' added to online users.")
+
+                    # Retrieve and send recent messages
+                    recent_msgs = get_recent_messages(username, limit=50)
                     formatted_msgs = [
                         {"from": sender, "message": content, "timestamp": timestamp}
                         for sender, content, receiver, timestamp in recent_msgs
                     ]
                     send_recent_messages(conn, formatted_msgs)
+
+                    # Retrieve and send undelivered messages
+                    undelivered_msgs = get_undelivered_messages(username)
+                    if undelivered_msgs:
+                        formatted_undelivered = [
+                            {"from": sender, "message": content, "timestamp": timestamp}
+                            for sender, content, timestamp in undelivered_msgs
+                        ]
+                        send_recent_messages(conn, formatted_undelivered)
+                        # Mark messages as delivered
+                        mark_messages_delivered(username)
+
+                    # Retrieve and send unread messages
+                    unread_msgs = get_unread_messages(username, limit=20)
+                    if unread_msgs:
+                        formatted_unread = [
+                            {
+                                "id": msg_id,
+                                "from": sender,
+                                "message": content,
+                                "timestamp": timestamp,
+                            }
+                            for msg_id, sender, content, timestamp in unread_msgs
+                        ]
+                        send_unread_messages(conn, formatted_unread)
                 else:
                     send_error(conn, "Invalid username or password.")
 
@@ -93,8 +140,11 @@ def handle_client_connection(conn, addr):
                 if not authenticated:
                     send_error(conn, "Authentication required. Please log in first.")
                     continue
-                receiver = data.get("receiver", "user")
+                receiver = data.get("receiver")
                 message_text = data.get("message", "")
+                if not receiver:
+                    send_error(conn, "Receiver username is required.")
+                    continue
                 if not message_text:
                     send_error(conn, "Empty message cannot be sent.")
                     continue
@@ -102,14 +152,67 @@ def handle_client_connection(conn, addr):
                 # Insert the message into the database
                 insert_message(username, message_text, receiver)
 
-                # For demonstration, we'll echo the message back
+                # Check if receiver is online
+                with online_users_lock:
+                    receiver_conn = online_users.get(receiver)
+
+                if receiver_conn:
+                    # Receiver is online; send the message
+                    message_payload = {
+                        "from": username,
+                        "message": message_text,
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "read": False,  # Initial read status
+                        "action": "send_message",
+                    }
+                    try:
+                        send_ws_frame(receiver_conn, message_payload)
+                        print(f"Message sent to '{receiver}'.")
+                        # Optionally, mark the message as delivered immediately
+                        # For simplicity, assuming messages are marked as delivered on login
+                    except Exception as e:
+                        print(f"Failed to send message to '{receiver}': {e}")
+                        send_error(conn, f"Failed to send message to '{receiver}'.")
+                        continue
+                else:
+                    # Receiver is offline; message remains undelivered
+                    print(
+                        f"User '{receiver}' is offline. Message stored for later delivery."
+                    )
+
+                # Echo the message back to the sender as confirmation
                 response = {
                     "status": "success",
                     "from": username,
                     "message": message_text,
                     "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "action": "send_message",
                 }
-                send_ws_frame(conn, response)
+                send_success(conn, response)
+
+            elif action == "mark_as_read":
+                # Only allow if authenticated
+                if not authenticated:
+                    send_error(conn, "Authentication required. Please log in first.")
+                    continue
+
+                message_ids = data.get("message_ids", [])
+                if not isinstance(message_ids, list):
+                    send_error(conn, "'message_ids' should be a list.")
+                    continue
+
+                # Validate that message_ids are integers
+                if not all(isinstance(msg_id, int) for msg_id in message_ids):
+                    send_error(conn, "All 'message_ids' should be integers.")
+                    continue
+
+                # Mark messages as read in the database
+                mark_messages_as_read(message_ids)
+
+                send_success(
+                    conn,
+                    {"message": "Messages marked as read.", "action": "mark_as_read"},
+                )
 
             else:
                 # Unrecognized action
@@ -118,6 +221,11 @@ def handle_client_connection(conn, addr):
     except Exception as e:
         print(f"[-] Exception handling client {addr}: {e}")
     finally:
+        if authenticated and username:
+            with online_users_lock:
+                if online_users.get(username) == conn:
+                    del online_users[username]
+                    print(f"User '{username}' removed from online users.")
         conn.close()
         print(f"[-] Connection closed for {addr}")
 
@@ -145,4 +253,12 @@ def send_recent_messages(conn, messages):
     Sends recent messages to the client after successful login.
     """
     payload = {"action": "recent_messages", "messages": messages}
+    send_ws_frame(conn, payload)
+
+
+def send_unread_messages(conn, messages):
+    """
+    Sends unread messages to the client after successful login.
+    """
+    payload = {"action": "unread_messages", "messages": messages}
     send_ws_frame(conn, payload)

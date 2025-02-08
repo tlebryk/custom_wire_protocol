@@ -11,3 +11,8 @@ dependencies = [
     "uvicorn>=0.34.0",
     "websockets>=14.2",
 ]
+
+[dependency-groups]
+dev = [
+    "watchfiles>=1.0.4",
+]

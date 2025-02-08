@@ -63,7 +63,7 @@ def authenticate_user(username, password):
         conn.close()  
 
 
-def delete_account(username, password):
+def delete_account(username):
     """
     Deletes a user and their messages from the database.
     Returns True if successful, False otherwise.

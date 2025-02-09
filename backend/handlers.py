@@ -20,6 +20,202 @@ online_users = {}
 online_users_lock = threading.Lock()
 
 
+class ClientContext:
+    """
+    Encapsulates the state of a connected client.
+    """
+
+    def __init__(self, conn, addr):
+        self.conn = conn
+        self.addr = addr
+        self.authenticated = False
+        self.username = None
+
+
+def handle_register(context, data):
+    reg_username = data.get("username")
+    reg_password = data.get("password")
+    if not reg_username or not reg_password:
+        send_error(context.conn, "Username and password are required for registration.")
+        return
+
+    success, message = register_user(reg_username, reg_password)
+    if success:
+        send_success(context.conn, {"message": message, "action": "register"})
+    else:
+        send_error(context.conn, message)
+
+
+def handle_login(context, data):
+    login_username = data.get("username")
+    login_password = data.get("password")
+    if not login_username or not login_password:
+        send_error(context.conn, "Username and password are required for login.")
+        return
+
+    success = authenticate_user(login_username, login_password)
+    if success:
+        context.authenticated = True
+        context.username = login_username
+        send_success(
+            context.conn,
+            {
+                "message": f"Login successful. Welcome, {context.username}!",
+                "action": "login",
+            },
+        )
+        print(f"User '{context.username}' authenticated.")
+
+        # Add user to online_users
+        with online_users_lock:
+            online_users[context.username] = context.conn
+            print(f"User '{context.username}' added to online users.")
+
+        # Retrieve and send recent messages
+        recent_msgs = get_recent_messages(context.username, limit=50)
+        formatted_msgs = [
+            {"from": sender, "message": content, "timestamp": timestamp}
+            for sender, content, receiver, timestamp in recent_msgs
+        ]
+        send_recent_messages(context.conn, formatted_msgs)
+
+        # Retrieve and send undelivered messages
+        undelivered_msgs = get_undelivered_messages(context.username)
+        if undelivered_msgs:
+            formatted_undelivered = [
+                {"from": sender, "message": content, "timestamp": timestamp}
+                for sender, content, timestamp in undelivered_msgs
+            ]
+            send_recent_messages(context.conn, formatted_undelivered)
+            # Mark messages as delivered
+            mark_messages_delivered(context.username)
+
+        # Retrieve and send unread messages
+        unread_msgs = get_unread_messages(context.username, limit=20)
+        if unread_msgs:
+            formatted_unread = [
+                {
+                    "id": msg_id,
+                    "from": sender,
+                    "message": content,
+                    "timestamp": timestamp,
+                }
+                for msg_id, sender, content, timestamp in unread_msgs
+            ]
+            send_unread_messages(context.conn, formatted_unread)
+    else:
+        send_error(context.conn, "Invalid username or password.")
+
+
+def handle_send_message(context, data):
+    if not context.authenticated:
+        send_error(context.conn, "Authentication required. Please log in first.")
+        return
+
+    receiver = data.get("receiver")
+    message_text = data.get("message", "")
+    if not receiver:
+        send_error(context.conn, "Receiver username is required.")
+        return
+    if not message_text:
+        send_error(context.conn, "Empty message cannot be sent.")
+        return
+
+    # Insert the message into the database
+    insert_message(context.username, message_text, receiver)
+
+    # Check if receiver is online
+    with online_users_lock:
+        receiver_conn = online_users.get(receiver)
+
+    if receiver_conn:
+        # Receiver is online; send the message
+        message_payload = {
+            "from": context.username,
+            "message": message_text,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "read": False,  # Initial read status
+            "action": "send_message",
+        }
+        try:
+            send_ws_frame(receiver_conn, message_payload)
+            print(f"Message sent to '{receiver}'.")
+            # Optionally, mark the message as delivered immediately
+            # For simplicity, assuming messages are marked as delivered on login
+        except Exception as e:
+            print(f"Failed to send message to '{receiver}': {e}")
+            send_error(context.conn, f"Failed to send message to '{receiver}'.")
+            return
+    else:
+        # Receiver is offline; message remains undelivered
+        print(f"User '{receiver}' is offline. Message stored for later delivery.")
+
+    # Echo the message back to the sender as confirmation
+    response = {
+        "status": "success",
+        "from": context.username,
+        "message": message_text,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "action": "send_message",
+    }
+    send_success(context.conn, response)
+
+
+def handle_mark_as_read(context, data):
+    if not context.authenticated:
+        send_error(context.conn, "Authentication required. Please log in first.")
+        return
+
+    message_ids = data.get("message_ids", [])
+    if not isinstance(message_ids, list):
+        send_error(context.conn, "'message_ids' should be a list.")
+        return
+
+    # Validate that message_ids are integers
+    if not all(isinstance(msg_id, int) for msg_id in message_ids):
+        send_error(context.conn, "All 'message_ids' should be integers.")
+        return
+
+    # Mark messages as read in the database
+    mark_messages_as_read(message_ids)
+
+    send_success(
+        context.conn,
+        {"message": "Messages marked as read.", "action": "mark_as_read"},
+    )
+
+
+def handle_delete_account(context, data):
+    if not context.authenticated:
+        send_error(context.conn, "Authentication required. Please log in first.")
+        return
+
+    success = delete_account(context.username)
+    if success:
+        send_success(context.conn, {"message": "Account deleted successfully."})
+        with online_users_lock:
+            if online_users.get(context.username) == context.conn:
+                del online_users[context.username]
+                print(f"User '{context.username}' removed from online users.")
+        context.conn.close()
+    else:
+        send_error(context.conn, "Failed to delete account.")
+
+
+def handle_unknown_action(context, action):
+    send_error(context.conn, f"Unknown action '{action}'.")
+
+
+# Dispatcher mapping actions to handler functions
+ACTION_HANDLERS = {
+    "register": handle_register,
+    "login": handle_login,
+    "send_message": handle_send_message,
+    "mark_as_read": handle_mark_as_read,
+    "delete_account": handle_delete_account,
+}
+
+
 def handle_client_connection(conn, addr):
     """
     Handles a new client connection:
@@ -32,9 +228,8 @@ def handle_client_connection(conn, addr):
         conn.close()
         return  # Handshake failed, close connection
 
-    # Track authentication state for this connection
-    authenticated = False
-    username = None
+    # Initialize client context
+    context = ClientContext(conn, addr)
 
     try:
         while True:
@@ -57,183 +252,21 @@ def handle_client_connection(conn, addr):
                 send_error(conn, "Missing 'action' in JSON message.")
                 continue
 
-            # Handle actions
-            if action == "register":
-                # Handle user registration
-                reg_username = data.get("username")
-                reg_password = data.get("password")
-                if not reg_username or not reg_password:
-                    send_error(
-                        conn, "Username and password are required for registration."
-                    )
-                    continue
-
-                success, message = register_user(reg_username, reg_password)
-                if success:
-                    send_success(conn, {"message": message, action: "register"})
-                else:
-                    send_error(conn, message)
-
-            elif action == "login":
-                # Handle user login
-                login_username = data.get("username")
-                login_password = data.get("password")
-                if not login_username or not login_password:
-                    send_error(conn, "Username and password are required for login.")
-                    continue
-
-                success = authenticate_user(login_username, login_password)
-                if success:
-                    authenticated = True
-                    username = login_username
-                    send_success(
-                        conn,
-                        {
-                            "message": f"Login successful. Welcome, {username}!",
-                            "action": "login",
-                        },
-                    )
-                    print(f"User '{username}' authenticated.")
-
-                    # Add user to online_users
-                    with online_users_lock:
-                        online_users[username] = conn
-                        print(f"User '{username}' added to online users.")
-
-                    # Retrieve and send recent messages
-                    recent_msgs = get_recent_messages(username, limit=50)
-                    formatted_msgs = [
-                        {"from": sender, "message": content, "timestamp": timestamp}
-                        for sender, content, receiver, timestamp in recent_msgs
-                    ]
-                    send_recent_messages(conn, formatted_msgs)
-
-                    # Retrieve and send undelivered messages
-                    undelivered_msgs = get_undelivered_messages(username)
-                    if undelivered_msgs:
-                        formatted_undelivered = [
-                            {"from": sender, "message": content, "timestamp": timestamp}
-                            for sender, content, timestamp in undelivered_msgs
-                        ]
-                        send_recent_messages(conn, formatted_undelivered)
-                        # Mark messages as delivered
-                        mark_messages_delivered(username)
-
-                    # Retrieve and send unread messages
-                    unread_msgs = get_unread_messages(username, limit=20)
-                    if unread_msgs:
-                        formatted_unread = [
-                            {
-                                "id": msg_id,
-                                "from": sender,
-                                "message": content,
-                                "timestamp": timestamp,
-                            }
-                            for msg_id, sender, content, timestamp in unread_msgs
-                        ]
-                        send_unread_messages(conn, formatted_unread)
-                else:
-                    send_error(conn, "Invalid username or password.")
-
-            elif action == "send_message":
-                # Only allow if authenticated
-                if not authenticated:
-                    send_error(conn, "Authentication required. Please log in first.")
-                    continue
-                receiver = data.get("receiver")
-                message_text = data.get("message", "")
-                if not receiver:
-                    send_error(conn, "Receiver username is required.")
-                    continue
-                if not message_text:
-                    send_error(conn, "Empty message cannot be sent.")
-                    continue
-
-                # Insert the message into the database
-                insert_message(username, message_text, receiver)
-
-                # Check if receiver is online
-                with online_users_lock:
-                    receiver_conn = online_users.get(receiver)
-
-                if receiver_conn:
-                    # Receiver is online; send the message
-                    message_payload = {
-                        "from": username,
-                        "message": message_text,
-                        "timestamp": datetime.utcnow().isoformat() + "Z",
-                        "read": False,  # Initial read status
-                        "action": "send_message",
-                    }
-                    try:
-                        send_ws_frame(receiver_conn, message_payload)
-                        print(f"Message sent to '{receiver}'.")
-                        # Optionally, mark the message as delivered immediately
-                        # For simplicity, assuming messages are marked as delivered on login
-                    except Exception as e:
-                        print(f"Failed to send message to '{receiver}': {e}")
-                        send_error(conn, f"Failed to send message to '{receiver}'.")
-                        continue
-                else:
-                    # Receiver is offline; message remains undelivered
-                    print(
-                        f"User '{receiver}' is offline. Message stored for later delivery."
-                    )
-
-                # Echo the message back to the sender as confirmation
-                response = {
-                    "status": "success",
-                    "from": username,
-                    "message": message_text,
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
-                    "action": "send_message",
-                }
-                send_success(conn, response)
-
-            elif action == "mark_as_read":
-                # Only allow if authenticated
-                if not authenticated:
-                    send_error(conn, "Authentication required. Please log in first.")
-                    continue
-
-                message_ids = data.get("message_ids", [])
-                if not isinstance(message_ids, list):
-                    send_error(conn, "'message_ids' should be a list.")
-                    continue
-
-                # Validate that message_ids are integers
-                if not all(isinstance(msg_id, int) for msg_id in message_ids):
-                    send_error(conn, "All 'message_ids' should be integers.")
-                    continue
-
-                # Mark messages as read in the database
-                mark_messages_as_read(message_ids)
-
-                send_success(
-                    conn,
-                    {"message": "Messages marked as read.", "action": "mark_as_read"},
-                )
-            elif action == "delete_account":
-                success = delete_account(username)
-                if success:
-                    send_success(conn, {"message": "Account deleted successfully."})
-                    conn.close()
-                    return  # Disconnect the user after deletion
-                else:
-                    send_error(conn, "Failed to delete account.")
-
+            # Dispatch to the appropriate handler
+            handler = ACTION_HANDLERS.get(action, None)
+            if handler:
+                handler(context, data)
             else:
-                # Unrecognized action
-                send_error(conn, f"Unknown action '{action}'.")
+                handle_unknown_action(context, action)
 
     except Exception as e:
         print(f"[-] Exception handling client {addr}: {e}")
     finally:
-        if authenticated and username:
+        if context.authenticated and context.username:
             with online_users_lock:
-                if online_users.get(username) == conn:
-                    del online_users[username]
-                    print(f"User '{username}' removed from online users.")
+                if online_users.get(context.username) == conn:
+                    del online_users[context.username]
+                    print(f"User '{context.username}' removed from online users.")
         conn.close()
         print(f"[-] Connection closed for {addr}")
 

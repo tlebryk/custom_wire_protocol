@@ -10,6 +10,7 @@ export function handleLogin(data) {
         document.getElementById('authBox').classList.add('hidden');
         document.getElementById('chatBox').classList.remove('hidden');
         document.getElementById('deleteAccountContainer').classList.remove('hidden');
+        document.getElementById('messages-container').classList.remove('hidden');
     } else {
         // Handle unsuccessful login attempts if necessary
         displayError(data.message || "Login failed.");
@@ -18,11 +19,7 @@ export function handleLogin(data) {
 
 export function handleSendMessage(data) {
     // Assuming the server sends back confirmation or details about the sent message
-    if (data.status === "success") {
-        console.log("Message sent successfully.");
-    } else if (data.status === "error") {
-        displayError(data.message || "Failed to send message.");
-    }
+    appendChatMessage('unread-messages', data.from, data.message, "unread", data.timestamp);
 }
 
 export function handleErrorMessage(data) {

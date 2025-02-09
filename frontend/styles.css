@@ -38,9 +38,47 @@ body {
     background-color: #f9f9f9;
 }
 
+/* styles.css */
+
+/* Base message styling */
 .message {
-    margin-bottom: 10px;
+    padding: 10px;
+    margin-bottom: 5px;
+    border-radius: 5px;
 }
+
+/* Recent messages styling */
+.message.recent {
+    background-color: #e0f7fa;
+    /* Light cyan */
+    color: #006064;
+    /* Dark cyan */
+}
+
+/* Unread messages styling */
+.message.unread {
+    background-color: #ffebee;
+    /* Light red */
+    color: #c62828;
+    /* Dark red */
+    font-weight: bold;
+}
+
+/* Received messages styling */
+.message.received {
+    background-color: #f1f8e9;
+    /* Light green */
+    color: #33691e;
+    /* Dark green */
+}
+
+/* Timestamp styling */
+.timestamp {
+    color: #757575;
+    font-size: 0.85em;
+    margin-left: 5px;
+}
+
 
 .sent {
     color: blue;
@@ -68,10 +106,4 @@ body {
     text-decoration: underline;
     margin-top: 10px;
     display: inline-block;
-}
-
-.timestamp {
-    font-size: 0.8em;
-    color: #666;
-    margin-left: 5px;
 }

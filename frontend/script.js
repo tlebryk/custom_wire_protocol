@@ -36,12 +36,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // Handler Functions
 const handlers = {
-    recent_messages: handleRecentMessages,
     login: handleLogin,
     send_message: handleSendMessage,
     recent_messages: handleRecentMessages,
     unread_messages: handleUnreadMessages,
-    // You can add more handlers here as needed
     default: handleDefaultMessage
 };
 
@@ -49,6 +47,7 @@ const handlers = {
 window.ws.onopen = function () {
     console.log("WebSocket connection established.");
 };
+
 window.ws.onmessage = function (event) {
     console.log("Message from server:", event.data);
     let data;
@@ -58,13 +57,12 @@ window.ws.onmessage = function (event) {
         console.error("Failed to parse server message:", err);
         return;
     }
-
     const action = data.action;
-
     if (action && handlers[action]) {
         // Log the action and the function we're calling 
         console.log("Received action:", action);
         console.log("Using handler:", handlers[action].name);
+
         handlers[action](data);
     } else if (data.from && data.message) {
         // Handle real-time incoming messages without a specific action

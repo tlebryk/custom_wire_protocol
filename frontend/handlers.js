@@ -1,13 +1,6 @@
 // handlers.js
 
-export function handleRecentMessages(data) {
-    const messages = data.messages;
-    if (Array.isArray(messages)) {
-        messages.forEach(msg => {
-            appendChatMessage(msg.from, msg.message, "received", msg.timestamp);
-        });
-    }
-}
+
 
 export function handleLogin(data) {
     if (data.status === "success" && data.message && data.message.includes("Login successful")) {
@@ -54,19 +47,23 @@ export function handleErrorMessage(data) {
 export function handleDefaultMessage(data) {
     console.log("Unhandled message type:", data);
 }
-
+export function handleRecentMessages(data) {
+    data.messages.forEach(msg => {
+        appendChatMessage('recent-messages', msg.from, msg.message, "recent", msg.timestamp);
+    });
+}
 
 // Handler for recent_messages action
 // Handler for unread_messages action
 export function handleUnreadMessages(data) {
     data.messages.forEach(msg => {
-        appendChatMessage('unread-messages', msg.sender, msg.text, "unread", msg.timestamp);
+        appendChatMessage('unread-messages', msg.from, msg.message, "unread", msg.timestamp);
     });
 }
 
 // Handler for default action
 export function handleDefault(data) {
-    appendChatMessage('messages', data.from, data.message, "default", data.timestamp);
+    appendChatMessage('recent-messages', data.from, data.message, "default", data.timestamp);
 }
 
 // appendChatMessage.js
@@ -86,7 +83,6 @@ export function appendChatMessage(containerId, sender, text, cssClass, timestamp
         const date = new Date(timestamp);
         timeText = `<span class="timestamp">[${date.toLocaleTimeString()}]</span> `;
     }
-
     newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}${text}`;
     messagesDiv.appendChild(newMessage);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;

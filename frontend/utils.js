@@ -52,7 +52,8 @@ export function sendMessage() {
         receiver: receiver
     };
     window.ws.send(JSON.stringify(msgPayload));
-    appendChatMessage("You", messageText, "sent", new Date().toISOString());
+
+    appendChatMessage("recent-messages", messageText, "sent", new Date().toISOString());
     document.getElementById('messageText').value = "";
 }
 

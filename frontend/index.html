@@ -43,9 +43,22 @@
         <button onclick="sendMessage()">Send</button>
         <div id="errorBox" class="hidden"></div>
     </div>
+    <!-- index.html -->
+
+    <div id="messages-container">
+        <div id="recent-messages-section">
+            <h2>Recent Messages</h2>
+            <div id="recent-messages"></div>
+        </div>
+
+        <div id="unread-messages-section">
+            <h2>Unread Messages</h2>
+            <div id="unread-messages"></div>
+        </div>
+    </div>
 
     <!-- Delete button -->
-    <div id="deleteAccountBtn" class="hidden">
+    <div id="deleteAccountContainer" class="hidden">
         <button id="deleteAccountBtn" onclick="deleteAccount()">Delete Account</button>
     </div>
 

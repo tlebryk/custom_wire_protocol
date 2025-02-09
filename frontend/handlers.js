@@ -16,6 +16,7 @@ export function handleLogin(data) {
         // Hide authentication and show chat box
         document.getElementById('authBox').classList.add('hidden');
         document.getElementById('chatBox').classList.remove('hidden');
+        document.getElementById('deleteAccountContainer').classList.remove('hidden');
     } else {
         // Handle unsuccessful login attempts if necessary
         displayError(data.message || "Login failed.");
@@ -55,13 +56,28 @@ export function handleDefaultMessage(data) {
 }
 
 
-// Append chat messages to the messages display area.
-export function appendChatMessage(sender, text, cssClass, timestamp = null) {
-    const messagesDiv = document.getElementById('messages');
+// Handler for recent_messages action
+// Handler for unread_messages action
+export function handleUnreadMessages(data) {
+    data.messages.forEach(msg => {
+        appendChatMessage('unread-messages', msg.sender, msg.text, "unread", msg.timestamp);
+    });
+}
+
+// Handler for default action
+export function handleDefault(data) {
+    appendChatMessage('messages', data.from, data.message, "default", data.timestamp);
+}
+
+// appendChatMessage.js
+
+export function appendChatMessage(containerId, sender, text, cssClass, timestamp = null) {
+    const messagesDiv = document.getElementById(containerId);
     if (!messagesDiv) {
-        console.error("Messages element not found!");
+        console.error(`Messages element ${containerId} not found!`);
         return;
     }
+
     const newMessage = document.createElement('div');
     newMessage.classList.add('message', cssClass);
 
@@ -70,6 +86,7 @@ export function appendChatMessage(sender, text, cssClass, timestamp = null) {
         const date = new Date(timestamp);
         timeText = `<span class="timestamp">[${date.toLocaleTimeString()}]</span> `;
     }
+
     newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}${text}`;
     messagesDiv.appendChild(newMessage);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;

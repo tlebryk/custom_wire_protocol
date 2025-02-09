@@ -7,6 +7,7 @@ window.lastRegUsername = ""; // stored username from registration attempt
 
 import {
     handleRecentMessages,
+    handleUnreadMessages,
     handleLogin,
     handleSendMessage,
     handleErrorMessage,
@@ -38,6 +39,8 @@ const handlers = {
     recent_messages: handleRecentMessages,
     login: handleLogin,
     send_message: handleSendMessage,
+    recent_messages: handleRecentMessages,
+    unread_messages: handleUnreadMessages,
     // You can add more handlers here as needed
     default: handleDefaultMessage
 };
@@ -46,7 +49,6 @@ const handlers = {
 window.ws.onopen = function () {
     console.log("WebSocket connection established.");
 };
-
 window.ws.onmessage = function (event) {
     console.log("Message from server:", event.data);
     let data;
@@ -60,10 +62,9 @@ window.ws.onmessage = function (event) {
     const action = data.action;
 
     if (action && handlers[action]) {
-        // log the action and the function we're calling 
+        // Log the action and the function we're calling 
         console.log("Received action:", action);
-        // log which hander we're using 
-        console.log("Using handler:", handlers[action]);
+        console.log("Using handler:", handlers[action].name);
         handlers[action](data);
     } else if (data.from && data.message) {
         // Handle real-time incoming messages without a specific action
@@ -77,7 +78,11 @@ window.ws.onmessage = function (event) {
         }
     } else {
         // Fallback for unhandled messages
-        handlers.default(data);
+        if (handlers.default) {
+            handlers.default(data);
+        } else {
+            console.warn("No handler found for message:", data);
+        }
     }
 };
 
@@ -95,4 +100,5 @@ window.displayError = displayError;
 window.appendChatMessage = appendChatMessage;
 window.sendLogin = sendLogin;
 window.sendMessage = sendMessage;
+window.deleteAccount = deleteAccount;
 

@@ -17,9 +17,14 @@ export function handleLogin(data) {
     }
 }
 
-export function handleSendMessage(data) {
+export function handleSentMessage(data) {
     // Assuming the server sends back confirmation or details about the sent message
-    appendUnreadMessage(data.from, data.message, "unread", data.timestamp);
+    appendRecentMessage(data.from, data.message, "recent", data.timestamp, data.id);
+}
+
+export function handleReceiveMessage(data) {
+    // Assuming the server sends back confirmation or details about the sent message
+    appendUnreadMessage(data.from, data.message, "unread", data.timestamp, data.id);
 }
 
 export function handleErrorMessage(data) {
@@ -46,28 +51,26 @@ export function handleDefaultMessage(data) {
 }
 export function handleRecentMessages(data) {
     data.messages.forEach(msg => {
-        appendRecentMessage(msg.from, msg.message, "recent", msg.timestamp);
+        appendRecentMessage(msg.from, msg.message, "recent", msg.timestamp, data.id);
     });
 }
 
-// Handler for recent_messages action
-// Handler for unread_messages action
+
 export function handleUnreadMessages(data) {
     data.messages.forEach(msg => {
-        appendUnreadMessage(msg.from, msg.message, "unread", msg.timestamp);
+        appendUnreadMessage(msg.from, msg.message, "unread", msg.timestamp, msg.id);
     });
 }
 
 // Handler for default action
 export function handleDefault(data) {
-    console.log("Unhandled message type:", data);
-    appendRecentMessage(data.from, data.message, "recent", data.timestamp);
+    // log error 
+    console.error("Unhandled message type:", data);
 }
 
-// appendChatMessage.js
 
 
-export function appendRecentMessage(sender, text, cssClass, timestamp = null) {
+export function appendRecentMessage(sender, text, cssClass = 'recent', timestamp = null, id = null) {
     const containerId = 'recent-messages';
 
     const messagesDiv = document.getElementById(containerId);
@@ -95,7 +98,7 @@ export function appendRecentMessage(sender, text, cssClass, timestamp = null) {
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-export function appendUnreadMessage(sender, text, cssClass, timestamp = null) {
+export function appendUnreadMessage(sender, text, cssClass = 'unread', timestamp = null, id = null) {
     const containerId = 'unread-messages';
 
     const messagesDiv = document.getElementById(containerId);
@@ -114,10 +117,15 @@ export function appendUnreadMessage(sender, text, cssClass, timestamp = null) {
     }
     const deleteButton = document.createElement('button');
     deleteButton.textContent = 'Delete';
+    // deleteButton.addEventListener('click', () => {
+    //     newMessage.remove();
+    // });
+    const readButton = document.createElement('button');
+    readButton.textContent = 'Mark as read';
     deleteButton.addEventListener('click', () => {
-        newMessage.remove();
+        readMessages([id]);
     });
-    newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}${text}`;
+    newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}&nbsp;&nbsp;${text}&nbsp;&nbsp;`;
     newMessage.appendChild(deleteButton);
     messagesDiv.appendChild(newMessage);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;

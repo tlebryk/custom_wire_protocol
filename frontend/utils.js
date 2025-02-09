@@ -51,9 +51,10 @@ export function sendMessage() {
         message: messageText,
         receiver: receiver
     };
+    console.log("Sending message:", msgPayload);
     window.ws.send(JSON.stringify(msgPayload));
     // figure out how to deal with sent messages at some point...
-    appendChatMessage("recent-messages", receiver, messageText, "recent", new Date().toISOString());
+    appendRecentMessage(receiver, messageText, "recent", new Date().toISOString());
     document.getElementById('messageText').value = "";
 }
 
@@ -85,4 +86,9 @@ export function deleteAccount() {
     window.ws.send(JSON.stringify(deletePayload));
     alert("Account deleted. You will be logged out.");
     location.reload();
+}
+
+export function readMessages(messageIds) {
+    const readPayload = { action: "mark_as_read", message_ids: messageIds };
+    window.ws.send(JSON.stringify(readPayload));
 }

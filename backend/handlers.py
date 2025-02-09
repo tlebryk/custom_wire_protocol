@@ -12,6 +12,8 @@ from database import (
     mark_messages_as_read,
 )
 from datetime import datetime
+from pathlib import Path
+import traceback
 
 # Global dictionary to track online users
 # Key: username, Value: connection object
@@ -73,18 +75,22 @@ def handle_login(context, data):
 
         # Retrieve and send recent messages
         recent_msgs = get_recent_messages(context.username, limit=50)
+        logging.info(f"Recent messages for '{context.username}': {recent_msgs}")
         formatted_msgs = [
             {"from": sender, "message": content, "timestamp": timestamp}
-            for sender, content, receiver, timestamp in recent_msgs
+            for sender, content, receiver, timestamp, id in recent_msgs
         ]
         send_recent_messages(context.conn, formatted_msgs)
-
         # Retrieve and send undelivered messages
         undelivered_msgs = get_undelivered_messages(context.username)
+        logging.info(
+            f"Undelivered messages for '{context.username}': {undelivered_msgs}"
+        )
+
         if undelivered_msgs:
             formatted_undelivered = [
                 {"from": sender, "message": content, "timestamp": timestamp}
-                for sender, content, timestamp in undelivered_msgs
+                for sender, content, timestamp, id in undelivered_msgs
             ]
             send_recent_messages(context.conn, formatted_undelivered)
             # Mark messages as delivered
@@ -92,6 +98,7 @@ def handle_login(context, data):
 
         # Retrieve and send unread messages
         unread_msgs = get_unread_messages(context.username, limit=20)
+        logging.info(f"Undelivered messages for '{context.username}': {unread_msgs}")
         if unread_msgs:
             formatted_unread = [
                 {
@@ -135,7 +142,9 @@ def handle_send_message(context, data):
             "message": message_text,
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "read": False,  # Initial read status
-            "action": "send_message",
+            "action": "received_message",
+            # TODO: get message
+            "id": None,
         }
         try:
             send_ws_frame(receiver_conn, message_payload)
@@ -156,7 +165,7 @@ def handle_send_message(context, data):
         "from": context.username,
         "message": message_text,
         "timestamp": datetime.utcnow().isoformat() + "Z",
-        "action": "send_message",
+        "action": "sent_message",
     }
     send_success(context.conn, response)
 
@@ -255,12 +264,14 @@ def handle_client_connection(conn, addr):
             # Dispatch to the appropriate handler
             handler = ACTION_HANDLERS.get(action, None)
             if handler:
+                logging.info(f"Received action: {action}")
                 handler(context, data)
             else:
+                logging.warning(f"Unknown action: {action}")
                 handle_unknown_action(context, action)
 
     except Exception as e:
-        print(f"[-] Exception handling client {addr}: {e}")
+        logging.error(f"Exception handling client {addr}: {e}", exc_info=True)
     finally:
         if context.authenticated and context.username:
             with online_users_lock:

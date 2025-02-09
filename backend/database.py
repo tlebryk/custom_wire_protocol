@@ -73,7 +73,7 @@ def get_recent_messages(user_id, limit=50):
 
     cursor.execute(
         """
-        SELECT sender, content, receiver, timestamp
+        SELECT sender, content, receiver, timestamp, id
         FROM messages
         WHERE (receiver = ? OR sender = ?)
         ORDER BY id DESC
@@ -102,7 +102,7 @@ def get_undelivered_messages(user_id):
 
     cursor.execute(
         """
-        SELECT sender, content, timestamp
+        SELECT sender, content, timestamp, id
         FROM messages
         WHERE receiver = ? AND delivered = 0
         ORDER BY id ASC

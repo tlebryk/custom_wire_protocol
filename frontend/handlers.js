@@ -19,7 +19,7 @@ export function handleLogin(data) {
 
 export function handleSendMessage(data) {
     // Assuming the server sends back confirmation or details about the sent message
-    appendChatMessage('unread-messages', data.from, data.message, "unread", data.timestamp);
+    appendUnreadMessage(data.from, data.message, "unread", data.timestamp);
 }
 
 export function handleErrorMessage(data) {
@@ -46,7 +46,7 @@ export function handleDefaultMessage(data) {
 }
 export function handleRecentMessages(data) {
     data.messages.forEach(msg => {
-        appendChatMessage('recent-messages', msg.from, msg.message, "recent", msg.timestamp);
+        appendRecentMessage(msg.from, msg.message, "recent", msg.timestamp);
     });
 }
 
@@ -54,19 +54,22 @@ export function handleRecentMessages(data) {
 // Handler for unread_messages action
 export function handleUnreadMessages(data) {
     data.messages.forEach(msg => {
-        appendChatMessage('unread-messages', msg.from, msg.message, "unread", msg.timestamp);
+        appendUnreadMessage(msg.from, msg.message, "unread", msg.timestamp);
     });
 }
 
 // Handler for default action
 export function handleDefault(data) {
     console.log("Unhandled message type:", data);
-    appendChatMessage('recent-messages', data.from, data.message, "recent", data.timestamp);
+    appendRecentMessage(data.from, data.message, "recent", data.timestamp);
 }
 
 // appendChatMessage.js
 
-export function appendChatMessage(containerId, sender, text, cssClass, timestamp = null) {
+
+export function appendRecentMessage(sender, text, cssClass, timestamp = null) {
+    const containerId = 'recent-messages';
+
     const messagesDiv = document.getElementById(containerId);
     if (!messagesDiv) {
         console.error(`Messages element ${containerId} not found!`);
@@ -81,7 +84,42 @@ export function appendChatMessage(containerId, sender, text, cssClass, timestamp
         const date = new Date(timestamp);
         timeText = `<span class="timestamp">[${date.toLocaleTimeString()}]</span> `;
     }
+    const deleteButton = document.createElement('button');
+    deleteButton.textContent = 'Delete';
+    deleteButton.addEventListener('click', () => {
+        newMessage.remove();
+    });
     newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}${text}`;
+    newMessage.appendChild(deleteButton);
     messagesDiv.appendChild(newMessage);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
+
+export function appendUnreadMessage(sender, text, cssClass, timestamp = null) {
+    const containerId = 'unread-messages';
+
+    const messagesDiv = document.getElementById(containerId);
+    if (!messagesDiv) {
+        console.error(`Messages element ${containerId} not found!`);
+        return;
+    }
+
+    const newMessage = document.createElement('div');
+    newMessage.classList.add('message', cssClass);
+
+    let timeText = '';
+    if (timestamp) {
+        const date = new Date(timestamp);
+        timeText = `<span class="timestamp">[${date.toLocaleTimeString()}]</span> `;
+    }
+    const deleteButton = document.createElement('button');
+    deleteButton.textContent = 'Delete';
+    deleteButton.addEventListener('click', () => {
+        newMessage.remove();
+    });
+    newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}${text}`;
+    newMessage.appendChild(deleteButton);
+    messagesDiv.appendChild(newMessage);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+

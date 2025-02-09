@@ -1,5 +1,3 @@
-# test_chat_server.py
-
 import pytest
 from unittest.mock import MagicMock, ANY
 from handlers import (

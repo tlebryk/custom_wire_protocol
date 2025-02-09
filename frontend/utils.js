@@ -52,8 +52,8 @@ export function sendMessage() {
         receiver: receiver
     };
     window.ws.send(JSON.stringify(msgPayload));
-
-    appendChatMessage("recent-messages", messageText, "sent", new Date().toISOString());
+    // figure out how to deal with sent messages at some point...
+    appendChatMessage("recent-messages", receiver, messageText, "recent", new Date().toISOString());
     document.getElementById('messageText').value = "";
 }
 

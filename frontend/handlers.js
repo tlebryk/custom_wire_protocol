@@ -63,7 +63,8 @@ export function handleUnreadMessages(data) {
 
 // Handler for default action
 export function handleDefault(data) {
-    appendChatMessage('recent-messages', data.from, data.message, "default", data.timestamp);
+    console.log("Unhandled message type:", data);
+    appendChatMessage('recent-messages', data.from, data.message, "recent", data.timestamp);
 }
 
 // appendChatMessage.js

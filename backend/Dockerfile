@@ -21,6 +21,7 @@ RUN uv sync
 
 COPY . .
 
+COPY ../configs /app/configs
 # # Expose the application port
 EXPOSE 8000
 

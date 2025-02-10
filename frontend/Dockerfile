@@ -6,6 +6,7 @@ WORKDIR /app
 
 # Copy all files from your frontend project into the container
 COPY . .
+COPY ../configs /app/configs
 
 # Expose port 8080 for the web server
 EXPOSE 8080

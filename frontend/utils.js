@@ -93,3 +93,10 @@ export function readMessages(messageIds) {
     window.ws.send(JSON.stringify(readPayload));
     // move the message from the unread-messages to the recent-messages 
 }
+
+export function readAllMessages() {
+    // get all message ids from 
+    const readPayload = { action: "mark_all_as_read" };
+    window.ws.send(JSON.stringify(readPayload));
+    // move the message from the unread-messages to the recent-messages 
+}

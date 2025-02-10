@@ -6,11 +6,12 @@ export function handleLogin(data) {
     if (data.status === "success" && data.message && data.message.includes("Login successful")) {
         window.isAuthenticated = true;
         console.log("Login successful");
-        // Hide authentication and show chat box
+        // Hide authentication and chat interface
         document.getElementById('authBox').classList.add('hidden');
         document.getElementById('chatBox').classList.remove('hidden');
         document.getElementById('deleteAccountContainer').classList.remove('hidden');
         document.getElementById('messages-container').classList.remove('hidden');
+        document.getElementById('nNewMessages').classList.remove('hidden');
     } else {
         // Handle unsuccessful login attempts if necessary
         displayError(data.message || "Login failed.");

@@ -11,6 +11,7 @@ services:
       - app-network
     volumes:
       - ./backend:/app
+      - ./configs:/app/configs
 
   frontend:
     build:
@@ -22,6 +23,7 @@ services:
       - app-network
     volumes:
       - ./frontend:/app
+      - ./configs:/app/configs
 
 networks:
   app-network:

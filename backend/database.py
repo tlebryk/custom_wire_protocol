@@ -14,11 +14,13 @@ def initialize_database():
     cursor = conn.cursor()
 
     # Create users table if it doesn't exist
+    # add number of unread messages to deliver
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
-            password_hash TEXT NOT NULL
+            password_hash TEXT NOT NULL,
+            n_unread_messages INTEGER NOT NULL DEFAULT 0
         )
     """
     )
@@ -148,7 +150,7 @@ def get_unread_messages(user_id, limit=20):
         """
         SELECT id, sender, content, timestamp
         FROM messages
-        WHERE receiver = ? AND read_status = 0
+        WHERE receiver = ? AND read_status = 50
         ORDER BY id ASC
         LIMIT ?
     """,
@@ -178,6 +180,35 @@ def mark_messages_as_read(message_ids):
 
     conn.commit()
     conn.close()
+
+
+#  get user information
+def get_user_info(username):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT username, n_unread_messages FROM users WHERE username = ?", (username,)
+    )
+    user_info = cursor.fetchone()
+
+    conn.close()
+
+    return user_info
+
+
+def set_n_unread_messages(username, n_unread_messages):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "UPDATE users SET n_unread_messages = ? WHERE username = ?",
+        (n_unread_messages, username),
+    )
+
+    conn.commit()
+    conn.close()
+    return True
 
 
 # Initialize the database when the module is imported

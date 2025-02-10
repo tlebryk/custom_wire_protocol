@@ -35,6 +35,12 @@
         <!-- Error Message Box -->
         <div id="errorBox" class="hidden" style="color: red;"></div>
     </div>
+    <!-- add a user input for the user to set n unread messages -->
+    <div id="nNewMessages" class="hidden">
+        <label for="userInputBox">Number of Unread Messages to Display</label>
+        <input type="number" id="userInputBox" min="0">
+        <button>Set </button>
+    </div>
 
     <div id="chatBox" class="hidden">
         <div id="messages"></div>

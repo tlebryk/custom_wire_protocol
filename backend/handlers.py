@@ -10,6 +10,8 @@ from database import (
     mark_messages_delivered,
     get_unread_messages,
     mark_messages_as_read,
+    get_user_info,
+    set_n_unread_messages,
 )
 from datetime import datetime
 from pathlib import Path
@@ -48,6 +50,27 @@ def handle_register(context, data):
         send_error(context.conn, message)
 
 
+def handle_set_n_unread_messages(context, data):
+    n_unread_messages = data.get("n_unread_messages")
+    username = context.username
+
+    if not n_unread_messages:
+        send_error(context.conn, "Number of unread messages is required.")
+        return
+
+    success = set_n_unread_messages(username, n_unread_messages)
+    if success:
+        send_success(
+            context.conn,
+            {
+                "message": "Number of unread messages set successfully.",
+                "action": "set_n_unread_messages",
+            },
+        )
+    else:
+        send_error(context.conn, "Failed to set number of unread messages.")
+
+
 def handle_login(context, data):
     login_username = data.get("username")
     login_password = data.get("password")
@@ -66,15 +89,26 @@ def handle_login(context, data):
                 "action": "login",
             },
         )
-        print(f"User '{context.username}' authenticated.")
+        logging.info(f"User '{context.username}' authenticated.")
 
         # Add user to online_users
         with online_users_lock:
             online_users[context.username] = context.conn
-            print(f"User '{context.username}' added to online users.")
+            logging.info(f"User '{context.username}' added to online users.")
+        # get number of messages the user wants to display
+        user_info = get_user_info(context.username)
+        n_message_index = 1
+        if user_info:
+            n_unread_messages = user_info[n_message_index]
+            logging.info(
+                f"User '{context.username}' has {n_unread_messages} unread messages."
+            )
+        else:
+            logging.info(f"User '{context.username}' not found in database.")
+            n_unread_messages = 50
 
         # Retrieve and send recent messages
-        recent_msgs = get_recent_messages(context.username, limit=50)
+        recent_msgs = get_recent_messages(context.username, limit=n_unread_messages)
         logging.info(f"Recent messages for '{context.username}': {recent_msgs}")
         formatted_msgs = [
             {"from": sender, "message": content, "timestamp": timestamp}
@@ -143,21 +177,22 @@ def handle_send_message(context, data):
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "read": False,  # Initial read status
             "action": "received_message",
-            # TODO: get message
-            "id": None,
+            "id": context.username,
         }
         try:
             send_ws_frame(receiver_conn, message_payload)
-            print(f"Message sent to '{receiver}'.")
+            logging.info(f"Message sent to '{receiver}'.")
             # Optionally, mark the message as delivered immediately
             # For simplicity, assuming messages are marked as delivered on login
         except Exception as e:
-            print(f"Failed to send message to '{receiver}': {e}")
+            logging.info(f"Failed to send message to '{receiver}': {e}")
             send_error(context.conn, f"Failed to send message to '{receiver}'.")
             return
     else:
         # Receiver is offline; message remains undelivered
-        print(f"User '{receiver}' is offline. Message stored for later delivery.")
+        logging.info(
+            f"User '{receiver}' is offline. Message stored for later delivery."
+        )
 
     # Echo the message back to the sender as confirmation
     response = {
@@ -205,7 +240,7 @@ def handle_delete_account(context, data):
         with online_users_lock:
             if online_users.get(context.username) == context.conn:
                 del online_users[context.username]
-                print(f"User '{context.username}' removed from online users.")
+                logging.info(f"User '{context.username}' removed from online users.")
         context.conn.close()
     else:
         send_error(context.conn, "Failed to delete account.")
@@ -222,6 +257,8 @@ ACTION_HANDLERS = {
     "send_message": handle_send_message,
     "mark_as_read": handle_mark_as_read,
     "delete_account": handle_delete_account,
+    "set_n_unread_messages": handle_set_n_unread_messages,
+    # "get_user_info": handle_get_user_info,
 }
 
 
@@ -232,7 +269,7 @@ def handle_client_connection(conn, addr):
       2. Manages user registration and login workflows.
       3. Processes other actions (like send_message) only if authenticated.
     """
-    print(f"[+] Client connected: {addr}")
+    logging.info(f"[+] Client connected: {addr}")
     if not perform_handshake(conn):
         conn.close()
         return  # Handshake failed, close connection
@@ -246,7 +283,7 @@ def handle_client_connection(conn, addr):
             if raw_msg is None:
                 break  # Connection closed or error
 
-            print(f"Received message from {addr}: {raw_msg}")
+            logging.info(f"Received message from {addr}: {raw_msg}")
 
             # Attempt to parse as JSON
             try:
@@ -277,9 +314,11 @@ def handle_client_connection(conn, addr):
             with online_users_lock:
                 if online_users.get(context.username) == conn:
                     del online_users[context.username]
-                    print(f"User '{context.username}' removed from online users.")
+                    logging.info(
+                        f"User '{context.username}' removed from online users."
+                    )
         conn.close()
-        print(f"[-] Connection closed for {addr}")
+        logging.info(f"[-] Connection closed for {addr}")
 
 
 def send_success(conn, payload_dict=None):
@@ -314,3 +353,6 @@ def send_unread_messages(conn, messages):
     """
     payload = {"action": "unread_messages", "messages": messages}
     send_ws_frame(conn, payload)
+
+
+# TODO: add codes to all responses

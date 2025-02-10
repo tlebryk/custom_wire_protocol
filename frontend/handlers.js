@@ -37,7 +37,7 @@ export function handleErrorMessage(data) {
             // Already in login form, do nothing extra here
         } else {
             // Toggle to login form
-            // window.toggleForms();
+            window.toggleForms();
             console.log("Toggle to login form");
         }
         displayError("Account already exists. Please enter your password to login.");
@@ -87,15 +87,20 @@ export function appendRecentMessage(sender, text, cssClass = 'recent', timestamp
         const date = new Date(timestamp);
         timeText = `<span class="timestamp">[${date.toLocaleTimeString()}]</span> `;
     }
+    newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}${text}`;
+    addDeleteButton(newMessage);
+    messagesDiv.appendChild(newMessage);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function addDeleteButton(messageDiv) {
     const deleteButton = document.createElement('button');
     deleteButton.textContent = 'Delete';
     deleteButton.addEventListener('click', () => {
-        newMessage.remove();
+        // TODO implement delete message in backend too 
+        messageDiv.remove();
     });
-    newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}${text}`;
-    newMessage.appendChild(deleteButton);
-    messagesDiv.appendChild(newMessage);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    messageDiv.appendChild(deleteButton);
 }
 
 export function appendUnreadMessage(sender, text, cssClass = 'unread', timestamp = null, id = null) {
@@ -109,24 +114,35 @@ export function appendUnreadMessage(sender, text, cssClass = 'unread', timestamp
 
     const newMessage = document.createElement('div');
     newMessage.classList.add('message', cssClass);
+    newMessage.id = id;
 
     let timeText = '';
     if (timestamp) {
         const date = new Date(timestamp);
         timeText = `<span class="timestamp">[${date.toLocaleTimeString()}]</span> `;
     }
-    const deleteButton = document.createElement('button');
-    deleteButton.textContent = 'Delete';
-    // deleteButton.addEventListener('click', () => {
-    //     newMessage.remove();
-    // });
+    addDeleteButton(newMessage);
     const readButton = document.createElement('button');
+    // give class markasreadbutton 
+    readButton.classList.add('markasreadbutton');
     readButton.textContent = 'Mark as read';
-    deleteButton.addEventListener('click', () => {
-        readMessages([id]);
+
+    readButton.addEventListener('click', () => {
+        // pass button id as well 
+        window.readMessages([id]);
+        // move new message to recent messages 
+        const newMessage = document.getElementById(id);
+        newMessage.remove();
+        const recentMessages = document.getElementById('recent-messages');
+        recentMessages.appendChild(newMessage);
+        // remove the mark as read button from newMessage
+        newMessage.removeChild(readButton);
+
+
     });
     newMessage.innerHTML = `<strong>${sender}:</strong> ${timeText}&nbsp;&nbsp;${text}&nbsp;&nbsp;`;
-    newMessage.appendChild(deleteButton);
+    // newMessage.appendChild(deleteButton);
+    newMessage.appendChild(readButton);
     messagesDiv.appendChild(newMessage);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }

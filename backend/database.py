@@ -76,6 +76,7 @@ def get_recent_messages(user_id, limit=50):
         SELECT sender, content, receiver, timestamp, id
         FROM messages
         WHERE (receiver = ? OR sender = ?)
+        AND delivered = 1 AND read_status = 1
         ORDER BY id DESC
         LIMIT ?
     """,

@@ -91,4 +91,5 @@ export function deleteAccount() {
 export function readMessages(messageIds) {
     const readPayload = { action: "mark_as_read", message_ids: messageIds };
     window.ws.send(JSON.stringify(readPayload));
+    // move the message from the unread-messages to the recent-messages 
 }

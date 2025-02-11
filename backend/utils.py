@@ -101,7 +101,7 @@ class WebSocketUtil:
     def __init__(self, mode=None):
         self.mode = mode
         if not mode:
-            self.mode = os.environ.get("MODE", "custom")
+            self.mode = os.environ.get("MODE", "json")
         if mode != "json":
             self.encoder = custom_protocol.Encoder(custom_protocol.load_protocols())
             self.decoder = custom_protocol.Decoder(custom_protocol.load_protocols())
@@ -186,7 +186,7 @@ class WebSocketUtil:
             print(f"[-] Error reading frame: {e}")
             return None
 
-    def send_ws_frame(self, conn, message, mode="custom"):
+    def send_ws_frame(self, conn, message, mode="json"):
         """
         Sends a JSON-encoded text frame to the client.
         """

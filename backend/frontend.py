@@ -7,7 +7,9 @@ import tkinter as tk
 from tkinter import messagebox
 import json
 import threading
-from websocket_client import WebSocketClient  # Import the WebSocketClient class
+
+# from websocket_client import WebSocketClient  # Import the WebSocketClient class
+from client import WebSocketClient  # Import the WebSocketClient class
 import logging, logging.config
 from pathlib import Path
 import datetime
@@ -33,10 +35,10 @@ class ChatApp(tk.Tk):
 
         # Initialize WebSocket client
         self.ws_client = WebSocketClient(
-            url="ws://localhost:8000",  # Replace with your server URL
-            on_message=self.handle_incoming_message,
-            on_error=self.handle_error,
-            on_close=self.handle_close,
+            # url="ws://localhost:8000",  # Replace with your server URL
+            # on_message=self.handle_incoming_message,
+            # on_error=self.handle_error,
+            # on_close=self.handle_close,
         )
         self.ws_client.connect()
 
@@ -50,7 +52,7 @@ class ChatApp(tk.Tk):
         self.messages_container = MessagesContainer(self)
         self.delete_account_container = DeleteAccountContainer(self)
         if not mode:
-            mode = os.environ.get("MODE", "custom")
+            mode = os.environ.get("MODE", "json")
             self.mode = mode
         if self.mode == "json":
             self.encoder = None
@@ -64,11 +66,11 @@ class ChatApp(tk.Tk):
         Handles incoming messages from the WebSocket server.
         """
         try:
-            if self.mode == "json":
-                data = json.loads(message)
-            else:
-                data = self.decoder.decode_message(message)
-
+            # if self.mode == "json":
+            #     data = json.loads(message)
+            # else:
+            #     data = self.decoder.decode_message(message)
+            data = message
             status = data.get("status")
             action = data.get("action")
             logging.warning(f"Received data: {data}")
@@ -189,14 +191,18 @@ class ChatApp(tk.Tk):
         Sends a message via the WebSocket client.
         """
         if self.ws_client and self.ws_client.connected:
-            if self.mode == "json":
-                data = json.dumps(message_dict)
-                data = data.encode("utf-8")
-            else:
-                logging.info("here")
-                data = self.encoder.encode_message(message_dict)
-                logging.warning(f"Sending data: {data}")
-            self.ws_client.send(data)
+            # if self.mode == "json":
+            #     data = json.dumps(message_dict)
+            #     data = data.encode("utf-8")
+            # else:
+            #     logging.info("here")
+            #     data = self.encoder.encode_message(message_dict)
+            #     logging.warning(f"Sending data: {data}")
+            self.ws_client.send(message_dict)
+            # receive is blocking
+            response = self.ws_client.receive()
+            logging.warning(f"Received response: {response}")
+            self.handle_incoming_message(response)
         else:
             messagebox.showwarning("Connection Error", "WebSocket is not connected.")
 

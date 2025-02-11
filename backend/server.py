@@ -2,9 +2,19 @@
 import socket
 import threading
 from handlers import handle_client_connection
+import logging
+import sys
 
-HOST = '127.0.0.1'
+# Configure the root logger
+logging.basicConfig(
+    level=logging.INFO,  # Set the desired logging level
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],  # Log to stdout
+)
+
+HOST = "0.0.0.0"
 PORT = 8000
+
 
 def main():
     """
@@ -21,7 +31,10 @@ def main():
 
         while True:
             conn, addr = s.accept()
-            threading.Thread(target=handle_client_connection, args=(conn, addr), daemon=True).start()
+            threading.Thread(
+                target=handle_client_connection, args=(conn, addr), daemon=True
+            ).start()
+
 
 if __name__ == "__main__":
     main()

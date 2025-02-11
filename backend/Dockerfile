@@ -21,9 +21,9 @@ RUN uv sync
 
 COPY . .
 
+COPY ../configs /app/configs
 # # Expose the application port
 EXPOSE 8000
 
 # # Command to run the application
-# CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-CMD ["uv", "run", "main2.py"]
+CMD ["uv", "run", "server.py"]

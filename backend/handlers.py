@@ -183,7 +183,7 @@ def handle_login(context, data):
             context.conn,
             {
                 "message": f"Login successful. Welcome, {context.username}!",
-                "action": "login",
+                "action": "confirm_login",
                 "username": context.username,
             },
         )

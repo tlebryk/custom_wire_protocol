@@ -127,7 +127,7 @@ class ChatApp(tk.Tk):
                         "Registration Successful",
                         data.get("message", "You have registered successfully."),
                     )
-                elif action == "login":
+                elif action == "confirm_login":
                     messagebox.showinfo(
                         "Login Successful",
                         data.get("message", "You have logged in successfully."),

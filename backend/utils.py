@@ -103,7 +103,7 @@ class WebSocketUtil:
         self.mode = mode
         if not mode:
             self.mode = os.environ.get("MODE", "json")
-            logging.info(f"Using mode: {self.mode}")
+            logging.warning(f"Using mode: {self.mode}")
         if mode != "json":
             self.encoder = custom_protocol.Encoder(custom_protocol.load_protocols())
             self.decoder = custom_protocol.Decoder(custom_protocol.load_protocols())
@@ -151,7 +151,7 @@ class WebSocketUtil:
 
             if masked:
                 masking_key = conn.recv(4)
-            logging.info("Payload Length: " + str(payload_len))
+            logging.warning("\n\nPayload Length: " + str(payload_len))
             payload_data = b""
             remaining = payload_len
             while remaining > 0:
@@ -196,7 +196,7 @@ class WebSocketUtil:
         Sends a JSON-encoded text frame to the client.
         """
         try:
-            logging.info(f"Sending message: {message}")
+            logging.warning(f"Sending message: {message}")
             if self.mode == "json":
                 if isinstance(message, dict):
                     payload = json.dumps(message).encode("utf-8")
@@ -208,9 +208,9 @@ class WebSocketUtil:
                 payload = encoder.encode_message(message)
                 logging.warning(f"WRITE PAYLOAD DATA: {payload}")
 
-            logging.info(f"Sending frame: {payload}")
+            logging.warning(f"Sending frame: {payload}")
             payload_len = len(payload)
-            logging.info("\n\nPayload Length: " + str(payload_len))
+            logging.warning("\n\nPayload Length: " + str(payload_len))
             frame = bytearray()
 
             # First byte: FIN=1 and opcode=1 (text)

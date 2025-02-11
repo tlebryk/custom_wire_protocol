@@ -99,7 +99,7 @@ def send_success(conn, payload_dict=None):
     if payload_dict is None:
         payload_dict = {}
     payload_dict["status"] = "success"
-    payload_dict["action"] = "success"
+    # payload_dict["action"] = "success"
     websocket.send_ws_frame(conn, payload_dict)
 
 
@@ -116,7 +116,7 @@ def send_recent_messages(conn, messages):
     Sends recent messages to the client after successful login.
     """
     payload = {"action": "recent_messages", "messages": messages}
-    send_success(conn, payload)
+    websocket.send_ws_frame(conn, payload)
 
 
 def send_unread_messages(conn, messages):
@@ -124,7 +124,7 @@ def send_unread_messages(conn, messages):
     Sends unread messages to the client after successful login.
     """
     payload = {"action": "unread_messages", "messages": messages}
-    send_success(conn, payload)
+    websocket.send_ws_frame(conn, payload)
 
 
 # TODO: add codes to all responses
@@ -191,6 +191,33 @@ def handle_login(context, data):
             online_users[context.username] = context.conn
             logging.info(f"User '{context.username}' added to online users.")
 
+    # Retrieve and send undelivered messages
+    undelivered_msgs = get_undelivered_messages(context.username)
+    logging.info(f"Undelivered messages for '{context.username}': {undelivered_msgs}")
+
+    if undelivered_msgs:
+        formatted_undelivered = [
+            {"from": sender, "message": content, "timestamp": timestamp}
+            for sender, content, timestamp, id in undelivered_msgs
+        ]
+        send_recent_messages(context.conn, formatted_undelivered)
+        # Mark messages as delivered
+        mark_messages_delivered(context.username)
+
+    # Retrieve and send unread messages
+    unread_msgs = get_unread_messages(context.username, limit=20)
+    logging.info(f"Undelivered messages for '{context.username}': {unread_msgs}")
+    if unread_msgs:
+        formatted_unread = [
+            {
+                "id": msg_id,
+                "from": sender,
+                "message": content,
+                "timestamp": timestamp,
+            }
+            for msg_id, sender, content, timestamp in unread_msgs
+        ]
+        send_unread_messages(context.conn, formatted_unread)
     else:
         send_error(context.conn, "Invalid username or password.")
 
@@ -318,26 +345,58 @@ ACTION_HANDLERS = {
 }
 
 
-# # get number of messages the user wants to display
-# user_info = get_user_info(context.username)
-# n_message_index = 1
-# if user_info:
-#     n_unread_messages = user_info[n_message_index]
-#     if not n_unread_messages:
-#         n_unread_messages = 50
+def handle_recent_messages(context, data):
+    if not context.authenticated:
+        send_error(context.conn, "Authentication required. Please log in first.")
+        return
 
-# else:
-#     logging.info(f"User '{context.username}' not found in database.")
-#     n_unread_messages = 50
+    # Retrieve and send recent messages
 
-# # Retrieve and send recent messages
-# recent_msgs = get_recent_messages(context.username, limit=n_unread_messages)
-# logging.info(f"Recent messages for '{context.username}': {recent_msgs}")
-# formatted_msgs = [
-#     {"from": sender, "message": content, "timestamp": timestamp, "id": id}
-#     for sender, content, receiver, timestamp, id in recent_msgs
-# ]
-# send_recent_messages(context.conn, formatted_msgs)
+    # get number of messages the user wants to display
+    user_info = get_user_info(context.username)
+    n_message_index = 1
+    if user_info:
+        n_unread_messages = user_info[n_message_index]
+        if not n_unread_messages:
+            n_unread_messages = 50
+
+    else:
+        logging.info(f"User '{context.username}' not found in database.")
+        n_unread_messages = 50
+
+    # Retrieve and send recent messages
+    recent_msgs = get_recent_messages(context.username, limit=n_unread_messages)
+    logging.info(f"Recent messages for '{context.username}': {recent_msgs}")
+    formatted_msgs = [
+        {"from": sender, "message": content, "timestamp": timestamp, "id": id}
+        for sender, content, receiver, timestamp, id in recent_msgs
+    ]
+    send_recent_messages(context.conn, formatted_msgs)
+
+
+def handle_unread_messages(context, data):
+    if not context.authenticated:
+        send_error(context.conn, "Authentication required. Please log in first.")
+        return
+
+    # Retrieve and send unread messages
+    unread_msgs = get_unread_messages(context.username, limit=20)
+    logging.info(f"Undelivered messages for '{context.username}': {unread_msgs}")
+    if unread_msgs:
+        formatted_unread = [
+            {
+                "id": msg_id,
+                "from": sender,
+                "message": content,
+                "timestamp": timestamp,
+            }
+            for msg_id, sender, content, timestamp in unread_msgs
+        ]
+        send_unread_messages(context.conn, formatted_unread)
+    else:
+        send_error(context.conn, "Invalid username or password.")
+
+
 # # Retrieve and send undelivered messages
 # undelivered_msgs = get_undelivered_messages(context.username)
 # logging.info(

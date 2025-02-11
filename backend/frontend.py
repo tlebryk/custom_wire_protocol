@@ -90,7 +90,11 @@ class ChatApp(tk.Tk):
                     self.chat_box.username = data.get("username")
                     self.messages_container.username = data.get("username")
                     self.delete_account_container.username = data.get("username")
+                    logging.info(f"User '{data.get('username')}' logged in.")
+
+                    # mesage_dict
                     self.switch_to_chat_screen()
+                    logging.info(f"User '{data.get('username')}' logged in.")
                 elif action == "sent_message":
                     # Confirmation of sent message (Optional)
                     pass
@@ -563,6 +567,7 @@ class MessagesContainer(tk.Frame):
         self.unread_messages_dict[id] = msg_frame
 
     def read_message(self, id, frame):
+        # TODO: convert to int rather than array?
         payload = {"action": "mark_as_read", "message_ids": [id]}
         self.master.send_message_via_ws(payload)
         frame.destroy()

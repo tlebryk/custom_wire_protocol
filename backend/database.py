@@ -2,6 +2,7 @@
 import sqlite3
 import os
 from datetime import datetime
+import logging
 
 DB_FILE = "chat_app.db"
 
@@ -12,7 +13,6 @@ def initialize_database():
     """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-
     # Create users table if it doesn't exist
     # add number of unread messages to deliver
     cursor.execute(
@@ -62,8 +62,12 @@ def insert_message(sender, content, receiver):
         (sender, content, receiver, timestamp, 0, 0),
     )
 
+    # Get the last inserted rowid
+    cursor.execute("SELECT last_insert_rowid()")
+    message_id = cursor.fetchone()[0]
     conn.commit()
     conn.close()
+    return message_id
 
 
 def get_recent_messages(user_id, limit=50):
@@ -72,16 +76,19 @@ def get_recent_messages(user_id, limit=50):
     """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-
-    cursor.execute(
-        """
+    query = """
         SELECT sender, content, receiver, timestamp, id
         FROM messages
         WHERE (receiver = ? OR sender = ?)
-        AND delivered = 1 AND read_status = 1
+        AND read_status = 1
         ORDER BY id DESC
         LIMIT ?
-    """,
+    """
+    logging.info(f"recent messages query: {query}")
+    logging.info(f"recent messages user_id: {user_id}")
+    logging.info(f"recent messages limit: {limit}")
+    cursor.execute(
+        query,
         (
             user_id,
             user_id,
@@ -90,6 +97,7 @@ def get_recent_messages(user_id, limit=50):
     )
 
     rows = cursor.fetchall()
+    logging.info(f"recent messages rows: {rows}")
     conn.close()
 
     # Reverse to have oldest messages first
@@ -150,7 +158,7 @@ def get_unread_messages(user_id, limit=20):
         """
         SELECT id, sender, content, timestamp
         FROM messages
-        WHERE receiver = ? AND read_status = 50
+        WHERE receiver = ? AND read_status = 0
         ORDER BY id ASC
         LIMIT ?
     """,
@@ -176,6 +184,8 @@ def mark_messages_as_read(message_ids):
     # Use parameter substitution to prevent SQL injection
     placeholders = ",".join(["?"] * len(message_ids))
     query = f"UPDATE messages SET read_status = 1 WHERE id IN ({placeholders})"
+    logging.info(f"mark_messages_as_read query: {query}")
+    logging.info(f"mark_messages_as_read query: {message_ids}")
     cursor.execute(query, message_ids)
 
     conn.commit()

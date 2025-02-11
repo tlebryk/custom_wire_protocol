@@ -1,7 +1,7 @@
 import json
 import logging
 import threading
-from utils import read_ws_frame, send_ws_frame, perform_handshake
+from utils import perform_handshake, WebSocketUtil
 from users import register_user, authenticate_user, delete_account
 from database import (
     insert_message,
@@ -16,12 +16,16 @@ from database import (
 from datetime import datetime
 from pathlib import Path
 import traceback
+import custom_protocol
 
 # Global dictionary to track online users
 # Key: username, Value: connection object
 online_users = {}
 # Lock for thread-safe operations on online_users
 online_users_lock = threading.Lock()
+
+# TODO get rid of global state
+websocket = WebSocketUtil()
 
 
 class ClientContext:
@@ -87,6 +91,7 @@ def handle_login(context, data):
             {
                 "message": f"Login successful. Welcome, {context.username}!",
                 "action": "login",
+                "username": context.username,
             },
         )
         logging.info(f"User '{context.username}' authenticated.")
@@ -100,9 +105,9 @@ def handle_login(context, data):
         n_message_index = 1
         if user_info:
             n_unread_messages = user_info[n_message_index]
-            logging.info(
-                f"User '{context.username}' has {n_unread_messages} unread messages."
-            )
+            if not n_unread_messages:
+                n_unread_messages = 50
+
         else:
             logging.info(f"User '{context.username}' not found in database.")
             n_unread_messages = 50
@@ -111,7 +116,7 @@ def handle_login(context, data):
         recent_msgs = get_recent_messages(context.username, limit=n_unread_messages)
         logging.info(f"Recent messages for '{context.username}': {recent_msgs}")
         formatted_msgs = [
-            {"from": sender, "message": content, "timestamp": timestamp}
+            {"from": sender, "message": content, "timestamp": timestamp, "id": id}
             for sender, content, receiver, timestamp, id in recent_msgs
         ]
         send_recent_messages(context.conn, formatted_msgs)
@@ -163,8 +168,8 @@ def handle_send_message(context, data):
         return
 
     # Insert the message into the database
-    insert_message(context.username, message_text, receiver)
-
+    id = insert_message(context.username, message_text, receiver)
+    logging.info(f"Message inserted with ID: {id}")
     # Check if receiver is online
     with online_users_lock:
         receiver_conn = online_users.get(receiver)
@@ -177,10 +182,11 @@ def handle_send_message(context, data):
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "read": False,  # Initial read status
             "action": "received_message",
-            "id": context.username,
+            "id": id,
+            "username": context.username,
         }
         try:
-            send_ws_frame(receiver_conn, message_payload)
+            send_success(receiver_conn, message_payload)
             logging.info(f"Message sent to '{receiver}'.")
             # Optionally, mark the message as delivered immediately
             # For simplicity, assuming messages are marked as delivered on login
@@ -276,21 +282,13 @@ def handle_client_connection(conn, addr):
 
     # Initialize client context
     context = ClientContext(conn, addr)
-
     try:
         while True:
-            raw_msg = read_ws_frame(conn)
-            if raw_msg is None:
+            data = websocket.read_ws_frame(conn)
+            if data is None:
                 break  # Connection closed or error
 
-            logging.info(f"Received message from {addr}: {raw_msg}")
-
-            # Attempt to parse as JSON
-            try:
-                data = json.loads(raw_msg)
-            except json.JSONDecodeError:
-                send_error(conn, "Invalid JSON format.")
-                continue
+            logging.info(f"Received message from {addr}: {data}")
 
             # Check if 'action' is present
             action = data.get("action")
@@ -328,7 +326,7 @@ def send_success(conn, payload_dict=None):
     if payload_dict is None:
         payload_dict = {}
     payload_dict["status"] = "success"
-    send_ws_frame(conn, payload_dict)
+    websocket.send_ws_frame(conn, payload_dict)
 
 
 def send_error(conn, message):
@@ -336,7 +334,7 @@ def send_error(conn, message):
     Helper to send a JSON response with status=error.
     """
     payload_dict = {"status": "error", "message": message}
-    send_ws_frame(conn, payload_dict)
+    websocket.send_ws_frame(conn, payload_dict)
 
 
 def send_recent_messages(conn, messages):
@@ -344,7 +342,7 @@ def send_recent_messages(conn, messages):
     Sends recent messages to the client after successful login.
     """
     payload = {"action": "recent_messages", "messages": messages}
-    send_ws_frame(conn, payload)
+    send_success(conn, payload)
 
 
 def send_unread_messages(conn, messages):
@@ -352,7 +350,7 @@ def send_unread_messages(conn, messages):
     Sends unread messages to the client after successful login.
     """
     payload = {"action": "unread_messages", "messages": messages}
-    send_ws_frame(conn, payload)
+    send_success(conn, payload)
 
 
 # TODO: add codes to all responses

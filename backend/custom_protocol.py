@@ -5,7 +5,10 @@ import struct
 from typing import Dict, Any
 
 
-def load_protocols(file_path="../configs/protocols.json"):
+# undo hardcode
+def load_protocols(
+    file_path="/home/tlebryk/262_distributed_systems/custom_wire_design/configs/protocols.json",
+):
     with open(file_path, "r") as f:
         protocols = json.load(f)
     return protocols
@@ -74,7 +77,7 @@ class Decoder:
         offset = 0
         if len(data) < 1:
             raise ValueError("Data too short to contain action ID.")
-
+        print(f"Data: {data}")
         # Unpack action ID (1 byte)
         action_id = struct.unpack_from("!B", data, offset)[0]
         offset += 1

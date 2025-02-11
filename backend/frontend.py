@@ -12,6 +12,7 @@ import logging, logging.config
 from pathlib import Path
 import datetime
 import custom_protocol
+import os
 
 # format logs to include filename and line number
 
@@ -23,7 +24,7 @@ logging.basicConfig(
 
 
 class ChatApp(tk.Tk):
-    def __init__(self, mode="json"):
+    def __init__(self, mode=None):
         super().__init__()
 
         self.title("WebSocket Chat - Registration and Login")
@@ -48,7 +49,9 @@ class ChatApp(tk.Tk):
         self.chat_box = ChatBox(self)
         self.messages_container = MessagesContainer(self)
         self.delete_account_container = DeleteAccountContainer(self)
-        self.mode = mode
+        if not mode:
+            mode = os.environ.get("MODE", "custom")
+            self.mode = mode
         if self.mode == "json":
             self.encoder = None
             self.decoder = None

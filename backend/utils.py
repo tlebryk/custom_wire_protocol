@@ -6,6 +6,8 @@ import struct
 import json  # Added import for json
 import logging
 import custom_protocol
+import traceback
+import os
 
 MAGIC_STRING = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 WS_FIN_TEXT_FRAME = 0x81  # FIN=1, Opcode=1 (text frame)
@@ -96,8 +98,10 @@ class WebSocketUtil:
     WS_OPCODE_CLOSE = 0x8  # Opcode for Close Frame
     WS_OPCODE_TEXT = 0x1  # Opcode for Text Frame
 
-    def __init__(self, mode="json"):
+    def __init__(self, mode=None):
         self.mode = mode
+        if not mode:
+            self.mode = os.environ.get("MODE", "custom")
         if mode != "json":
             self.encoder = custom_protocol.Encoder(custom_protocol.load_protocols())
             self.decoder = custom_protocol.Decoder(custom_protocol.load_protocols())
@@ -170,7 +174,7 @@ class WebSocketUtil:
                     data = json.loads(message)
                 else:
                     decoder = custom_protocol.Decoder(custom_protocol.load_protocols())
-                    data = decoder.decode(message)
+                    data = decoder.decode_message(message)
                 return data
 
             else:
@@ -178,10 +182,11 @@ class WebSocketUtil:
                 return None
 
         except Exception as e:
+            print(traceback.format_exc())
             print(f"[-] Error reading frame: {e}")
             return None
 
-    def send_ws_frame(self, conn, message, mode="json"):
+    def send_ws_frame(self, conn, message, mode="custom"):
         """
         Sends a JSON-encoded text frame to the client.
         """

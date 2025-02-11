@@ -115,16 +115,19 @@ def send_recent_messages(conn, messages):
     """
     Sends recent messages to the client after successful login.
     """
+    logging.warning(f"Sending recent messages: {messages}")
     payload = {"action": "recent_messages", "messages": messages}
-    websocket.send_ws_frame(conn, payload)
+    send_success(conn, payload)
 
 
 def send_unread_messages(conn, messages):
     """
     Sends unread messages to the client after successful login.
     """
+    logging.warning(f"Sending unread messages: {messages}")
+
     payload = {"action": "unread_messages", "messages": messages}
-    websocket.send_ws_frame(conn, payload)
+    send_success(conn, payload)
 
 
 # TODO: add codes to all responses
@@ -184,40 +187,42 @@ def handle_login(context, data):
                 "username": context.username,
             },
         )
-        logging.info(f"User '{context.username}' authenticated.")
+        logging.warning(f"User '{context.username}' authenticated.")
 
         # Add user to online_users
         with online_users_lock:
             online_users[context.username] = context.conn
-            logging.info(f"User '{context.username}' added to online users.")
+            logging.warning(f"User '{context.username}' added to online users.")
 
-    # Retrieve and send undelivered messages
-    undelivered_msgs = get_undelivered_messages(context.username)
-    logging.info(f"Undelivered messages for '{context.username}': {undelivered_msgs}")
+        # Retrieve and send undelivered messages
+        # undelivered_msgs = get_undelivered_messages(context.username)
+        # logging.warning(
+        #     f"Undelivered messages for '{context.username}': {undelivered_msgs}"
+        # )
 
-    if undelivered_msgs:
-        formatted_undelivered = [
-            {"from": sender, "message": content, "timestamp": timestamp}
-            for sender, content, timestamp, id in undelivered_msgs
-        ]
-        send_recent_messages(context.conn, formatted_undelivered)
-        # Mark messages as delivered
-        mark_messages_delivered(context.username)
+        # if undelivered_msgs:
+        #     formatted_undelivered = [
+        #         {"from": sender, "message": content, "timestamp": timestamp}
+        #         for sender, content, timestamp, id in undelivered_msgs
+        #     ]
+        #     send_recent_messages(context.conn, formatted_undelivered)
+        #     # Mark messages as delivered
+        #     mark_messages_delivered(context.username)
 
-    # Retrieve and send unread messages
-    unread_msgs = get_unread_messages(context.username, limit=20)
-    logging.info(f"Undelivered messages for '{context.username}': {unread_msgs}")
-    if unread_msgs:
-        formatted_unread = [
-            {
-                "id": msg_id,
-                "from": sender,
-                "message": content,
-                "timestamp": timestamp,
-            }
-            for msg_id, sender, content, timestamp in unread_msgs
-        ]
-        send_unread_messages(context.conn, formatted_unread)
+        # # Retrieve and send unread messages
+        # unread_msgs = get_unread_messages(context.username, limit=20)
+        # logging.warning(f"unread messages for '{context.username}': {unread_msgs}")
+        # if unread_msgs:
+        #     formatted_unread = [
+        #         {
+        #             "id": msg_id,
+        #             "from": sender,
+        #             "message": content,
+        #             "timestamp": timestamp,
+        #         }
+        #         for msg_id, sender, content, timestamp in unread_msgs
+        #     ]
+        #     send_unread_messages(context.conn, formatted_unread)
     else:
         send_error(context.conn, "Invalid username or password.")
 
@@ -333,16 +338,6 @@ def handle_echo(context, data):
 
 
 # Dispatcher mapping actions to handler functions
-ACTION_HANDLERS = {
-    "register": handle_register,
-    "login": handle_login,
-    "send_message": handle_send_message,
-    "mark_as_read": handle_mark_as_read,
-    "delete_account": handle_delete_account,
-    "set_n_unread_messages": handle_set_n_unread_messages,
-    # "get_user_info": handle_get_user_info,
-    "echo": handle_echo,
-}
 
 
 def handle_recent_messages(context, data):
@@ -426,3 +421,15 @@ def handle_unread_messages(context, data):
 #         for msg_id, sender, content, timestamp in unread_msgs
 #     ]
 #     send_unread_messages(context.conn, formatted_unread)
+ACTION_HANDLERS = {
+    "register": handle_register,
+    "login": handle_login,
+    "send_message": handle_send_message,
+    "mark_as_read": handle_mark_as_read,
+    "delete_account": handle_delete_account,
+    "set_n_unread_messages": handle_set_n_unread_messages,
+    # "get_user_info": handle_get_user_info,
+    "echo": handle_echo,
+    "get_unread_messages": handle_unread_messages,
+    "get_recent_messages": handle_recent_messages,
+}

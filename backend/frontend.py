@@ -61,6 +61,52 @@ class ChatApp(tk.Tk):
         else:
             self.encoder = custom_protocol.Encoder(custom_protocol.load_protocols())
             self.decoder = custom_protocol.Decoder(custom_protocol.load_protocols())
+        self.listening_thread = threading.Thread(
+            target=self.listen_for_messages, daemon=True
+        )
+        logging.info("Starting listening thread...")
+        self.listening_thread.start()
+
+    def listen_for_messages(self):
+        """
+        Continuously read messages from the server in a loop.
+        This runs in a separate thread so the UI remains responsive.
+        """
+        while True:
+            try:
+                message = self.ws_client.receive()
+                if message is None:
+                    # If receive returns None, it usually means a closed connection or error.
+                    logging.info("Server closed the connection or returned None.")
+                    break
+
+                # We must not update tkinter widgets directly in a thread.
+                # Instead, we schedule it on the main thread with `self.after(...)`.
+                self.after(0, lambda msg=message: self.handle_incoming_message(msg))
+
+            except Exception as e:
+                logging.error(f"Error in listening thread: {e}")
+                break
+
+    def send_message_via_ws(self, message_dict):
+        """
+        Sends a message via the WebSocket client.
+        """
+        if self.ws_client and self.ws_client.connected:
+            # if self.mode == "json":
+            #     data = json.dumps(message_dict)
+            #     data = data.encode("utf-8")
+            # else:
+            #     logging.info("here")
+            #     data = self.encoder.encode_message(message_dict)
+            #     logging.warning(f"Sending data: {data}")
+            self.ws_client.send(message_dict)
+            # receive is blocking
+            # response = self.ws_client.receive()
+            # logging.warning(f"Received response: {response}")
+            # self.handle_incoming_message(response)
+        else:
+            messagebox.showwarning("Connection Error", "WebSocket is not connected.")
 
     def handle_incoming_message(self, message):
         """
@@ -91,7 +137,9 @@ class ChatApp(tk.Tk):
                     self.messages_container.username = data.get("username")
                     self.delete_account_container.username = data.get("username")
                     logging.info(f"User '{data.get('username')}' logged in.")
-
+                    # call to get unread mesasges
+                    self.get_unread_messages()
+                    self.get_recent_messages()
                     # mesage_dict
                     self.switch_to_chat_screen()
                     logging.info(f"User '{data.get('username')}' logged in.")
@@ -114,6 +162,7 @@ class ChatApp(tk.Tk):
                 elif action == "recent_messages":
                     recent_msgs = data.get("messages", [])
                     for msg in recent_msgs:
+                        logging.info("Received recent message:", msg)
                         self.messages_container.add_recent_message(msg)
                 elif action == "unread_messages":
                     unread_msgs = data.get("messages", [])
@@ -150,6 +199,20 @@ class ChatApp(tk.Tk):
             print("Received non-JSON message.")
         except Exception as e:
             print(f"Error handling message: {e}")
+
+    def get_unread_messages(self):
+        message_dict = {
+            "action": "get_unread_messages",
+            "username": self.n_new_messages.username,
+        }
+        self.send_message_via_ws(message_dict)
+
+    def get_recent_messages(self):
+        message_dict = {
+            "action": "get_recent_messages",
+            "username": self.n_new_messages.username,
+        }
+        self.send_message_via_ws(message_dict)
 
     def handle_error(self, error):
         """
@@ -191,25 +254,11 @@ class ChatApp(tk.Tk):
         self.auth_box.show_register()
         self.auth_box.pack(pady=20)
 
-    def send_message_via_ws(self, message_dict):
-        """
-        Sends a message via the WebSocket client.
-        """
-        if self.ws_client and self.ws_client.connected:
-            # if self.mode == "json":
-            #     data = json.dumps(message_dict)
-            #     data = data.encode("utf-8")
-            # else:
-            #     logging.info("here")
-            #     data = self.encoder.encode_message(message_dict)
-            #     logging.warning(f"Sending data: {data}")
-            self.ws_client.send(message_dict)
-            # receive is blocking
-            response = self.ws_client.receive()
-            logging.warning(f"Received response: {response}")
-            self.handle_incoming_message(response)
-        else:
-            messagebox.showwarning("Connection Error", "WebSocket is not connected.")
+    def on_closing(self):
+        # If needed, close the socket or signal the listening thread to exit
+        if self.ws_client.socket:
+            self.ws_client.close()
+        self.destroy()
 
 
 class AuthBox(tk.Frame):
@@ -582,7 +631,7 @@ class MessagesContainer(tk.Frame):
         sender = message_data.get("from")
         timestamp = message_data.get("timestamp")
         message = message_data.get("message")
-
+        logging.info(f"Adding recent message: {message}")
         if not id:
             logging.error("Message data missing 'id'.")
             return

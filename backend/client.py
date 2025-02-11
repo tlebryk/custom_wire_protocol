@@ -9,6 +9,7 @@ class WebSocketClient:
         self.port = port
         self.socket = None
         self.websocket = WebSocketUtil(mode=mode)
+        # self.running = False
 
     def connect(self):
         """Establish connection and perform WebSocket handshake"""
@@ -48,6 +49,7 @@ class WebSocketClient:
 
     def receive(self):
         """Receive a message from the server"""
+
         return self.websocket.read_ws_frame(self.socket)
 
     def close(self):

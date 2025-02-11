@@ -3,6 +3,33 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
+# tests/conftest.py
+import pytest
+import threading
+import time
+import server  # Assuming server.py is in the root directory
+import logging
+
+
+@pytest.fixture(scope="session")
+def websocket_server():
+    """
+    Fixture to start the WebSocket server in a separate thread.
+    """
+    # Configure logging to show only critical errors during tests
+    logging.getLogger().setLevel(logging.CRITICAL)
+
+    server_thread = threading.Thread(target=server.main, daemon=True)
+    server_thread.start()
+
+    # Wait for the server to start
+    time.sleep(1)  # Adjust if necessary based on server startup time
+
+    yield
+
+    # Teardown logic (if any) can be added here
+    # Since the server runs in a daemon thread, it will exit when tests finish
+
 
 @pytest.fixture
 def mock_conn():

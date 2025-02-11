@@ -54,6 +54,7 @@ class ChatApp(tk.Tk):
         if not mode:
             mode = os.environ.get("MODE", "json")
             self.mode = mode
+            print(f"Mode: {mode}")
         if self.mode == "json":
             self.encoder = None
             self.decoder = None

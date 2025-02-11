@@ -40,6 +40,96 @@ class ClientContext:
         self.username = None
 
 
+def handle_client_connection(conn, addr):
+    """
+    Handles a new client connection:
+      1. Performs the WebSocket handshake.
+      2. Manages user registration and login workflows.
+      3. Processes other actions (like send_message) only if authenticated.
+    """
+    logging.info(f"[+] Client connected: {addr}")
+    if not perform_handshake(conn):
+        conn.close()
+        return  # Handshake failed, close connection
+
+    # Initialize client context
+    context = ClientContext(conn, addr)
+    try:
+        while True:
+            data = websocket.read_ws_frame(conn)
+            if data is None:
+                break  # Connection closed or error
+
+            logging.info(f"Received message from {addr}: {data}")
+
+            # Check if 'action' is present
+            action = data.get("action")
+            if not action:
+                send_error(conn, "Missing 'action' in JSON message.")
+                continue
+
+            # Dispatch to the appropriate handler
+            handler = ACTION_HANDLERS.get(action, None)
+            if handler:
+                logging.info(f"Received action: {action}")
+                handler(context, data)
+            else:
+                logging.warning(f"Unknown action: {action}")
+                handle_unknown_action(context, action)
+
+    except Exception as e:
+        logging.error(f"Exception handling client {addr}: {e}", exc_info=True)
+    finally:
+        if context.authenticated and context.username:
+            with online_users_lock:
+                if online_users.get(context.username) == conn:
+                    del online_users[context.username]
+                    logging.info(
+                        f"User '{context.username}' removed from online users."
+                    )
+        conn.close()
+        logging.info(f"[-] Connection closed for {addr}")
+
+
+def send_success(conn, payload_dict=None):
+    """
+    Helper to send a JSON response with status=success.
+    """
+    # TODO: make this less flexible
+    if payload_dict is None:
+        payload_dict = {}
+    payload_dict["status"] = "success"
+    payload_dict["action"] = "success"
+    websocket.send_ws_frame(conn, payload_dict)
+
+
+def send_error(conn, message):
+    """
+    Helper to send a JSON response with status=error.
+    """
+    payload_dict = {"status": "error", "message": message, "action": "error"}
+    websocket.send_ws_frame(conn, payload_dict)
+
+
+def send_recent_messages(conn, messages):
+    """
+    Sends recent messages to the client after successful login.
+    """
+    payload = {"action": "recent_messages", "messages": messages}
+    send_success(conn, payload)
+
+
+def send_unread_messages(conn, messages):
+    """
+    Sends unread messages to the client after successful login.
+    """
+    payload = {"action": "unread_messages", "messages": messages}
+    send_success(conn, payload)
+
+
+# TODO: add codes to all responses
+
+
 def handle_register(context, data):
     reg_username = data.get("username")
     reg_password = data.get("password")
@@ -100,55 +190,7 @@ def handle_login(context, data):
         with online_users_lock:
             online_users[context.username] = context.conn
             logging.info(f"User '{context.username}' added to online users.")
-        # get number of messages the user wants to display
-        user_info = get_user_info(context.username)
-        n_message_index = 1
-        if user_info:
-            n_unread_messages = user_info[n_message_index]
-            if not n_unread_messages:
-                n_unread_messages = 50
 
-        else:
-            logging.info(f"User '{context.username}' not found in database.")
-            n_unread_messages = 50
-
-        # Retrieve and send recent messages
-        recent_msgs = get_recent_messages(context.username, limit=n_unread_messages)
-        logging.info(f"Recent messages for '{context.username}': {recent_msgs}")
-        formatted_msgs = [
-            {"from": sender, "message": content, "timestamp": timestamp, "id": id}
-            for sender, content, receiver, timestamp, id in recent_msgs
-        ]
-        send_recent_messages(context.conn, formatted_msgs)
-        # Retrieve and send undelivered messages
-        undelivered_msgs = get_undelivered_messages(context.username)
-        logging.info(
-            f"Undelivered messages for '{context.username}': {undelivered_msgs}"
-        )
-
-        if undelivered_msgs:
-            formatted_undelivered = [
-                {"from": sender, "message": content, "timestamp": timestamp}
-                for sender, content, timestamp, id in undelivered_msgs
-            ]
-            send_recent_messages(context.conn, formatted_undelivered)
-            # Mark messages as delivered
-            mark_messages_delivered(context.username)
-
-        # Retrieve and send unread messages
-        unread_msgs = get_unread_messages(context.username, limit=20)
-        logging.info(f"Undelivered messages for '{context.username}': {unread_msgs}")
-        if unread_msgs:
-            formatted_unread = [
-                {
-                    "id": msg_id,
-                    "from": sender,
-                    "message": content,
-                    "timestamp": timestamp,
-                }
-                for msg_id, sender, content, timestamp in unread_msgs
-            ]
-            send_unread_messages(context.conn, formatted_unread)
     else:
         send_error(context.conn, "Invalid username or password.")
 
@@ -256,6 +298,13 @@ def handle_unknown_action(context, action):
     send_error(context.conn, f"Unknown action '{action}'.")
 
 
+# handlers.py (Add the echo handler)
+def handle_echo(context, data):
+    message = data.get("message", "")
+    response = {"status": "success", "message": message}
+    send_success(context.conn, response)
+
+
 # Dispatcher mapping actions to handler functions
 ACTION_HANDLERS = {
     "register": handle_register,
@@ -265,92 +314,56 @@ ACTION_HANDLERS = {
     "delete_account": handle_delete_account,
     "set_n_unread_messages": handle_set_n_unread_messages,
     # "get_user_info": handle_get_user_info,
+    "echo": handle_echo,
 }
 
 
-def handle_client_connection(conn, addr):
-    """
-    Handles a new client connection:
-      1. Performs the WebSocket handshake.
-      2. Manages user registration and login workflows.
-      3. Processes other actions (like send_message) only if authenticated.
-    """
-    logging.info(f"[+] Client connected: {addr}")
-    if not perform_handshake(conn):
-        conn.close()
-        return  # Handshake failed, close connection
+# # get number of messages the user wants to display
+# user_info = get_user_info(context.username)
+# n_message_index = 1
+# if user_info:
+#     n_unread_messages = user_info[n_message_index]
+#     if not n_unread_messages:
+#         n_unread_messages = 50
 
-    # Initialize client context
-    context = ClientContext(conn, addr)
-    try:
-        while True:
-            data = websocket.read_ws_frame(conn)
-            if data is None:
-                break  # Connection closed or error
+# else:
+#     logging.info(f"User '{context.username}' not found in database.")
+#     n_unread_messages = 50
 
-            logging.info(f"Received message from {addr}: {data}")
+# # Retrieve and send recent messages
+# recent_msgs = get_recent_messages(context.username, limit=n_unread_messages)
+# logging.info(f"Recent messages for '{context.username}': {recent_msgs}")
+# formatted_msgs = [
+#     {"from": sender, "message": content, "timestamp": timestamp, "id": id}
+#     for sender, content, receiver, timestamp, id in recent_msgs
+# ]
+# send_recent_messages(context.conn, formatted_msgs)
+# # Retrieve and send undelivered messages
+# undelivered_msgs = get_undelivered_messages(context.username)
+# logging.info(
+#     f"Undelivered messages for '{context.username}': {undelivered_msgs}"
+# )
 
-            # Check if 'action' is present
-            action = data.get("action")
-            if not action:
-                send_error(conn, "Missing 'action' in JSON message.")
-                continue
+# if undelivered_msgs:
+#     formatted_undelivered = [
+#         {"from": sender, "message": content, "timestamp": timestamp}
+#         for sender, content, timestamp, id in undelivered_msgs
+#     ]
+#     send_recent_messages(context.conn, formatted_undelivered)
+#     # Mark messages as delivered
+#     mark_messages_delivered(context.username)
 
-            # Dispatch to the appropriate handler
-            handler = ACTION_HANDLERS.get(action, None)
-            if handler:
-                logging.info(f"Received action: {action}")
-                handler(context, data)
-            else:
-                logging.warning(f"Unknown action: {action}")
-                handle_unknown_action(context, action)
-
-    except Exception as e:
-        logging.error(f"Exception handling client {addr}: {e}", exc_info=True)
-    finally:
-        if context.authenticated and context.username:
-            with online_users_lock:
-                if online_users.get(context.username) == conn:
-                    del online_users[context.username]
-                    logging.info(
-                        f"User '{context.username}' removed from online users."
-                    )
-        conn.close()
-        logging.info(f"[-] Connection closed for {addr}")
-
-
-def send_success(conn, payload_dict=None):
-    """
-    Helper to send a JSON response with status=success.
-    """
-    if payload_dict is None:
-        payload_dict = {}
-    payload_dict["status"] = "success"
-    websocket.send_ws_frame(conn, payload_dict)
-
-
-def send_error(conn, message):
-    """
-    Helper to send a JSON response with status=error.
-    """
-    payload_dict = {"status": "error", "message": message}
-    websocket.send_ws_frame(conn, payload_dict)
-
-
-def send_recent_messages(conn, messages):
-    """
-    Sends recent messages to the client after successful login.
-    """
-    payload = {"action": "recent_messages", "messages": messages}
-    send_success(conn, payload)
-
-
-def send_unread_messages(conn, messages):
-    """
-    Sends unread messages to the client after successful login.
-    """
-    payload = {"action": "unread_messages", "messages": messages}
-    send_success(conn, payload)
-
-
-# TODO: add codes to all responses
+# # Retrieve and send unread messages
+# unread_msgs = get_unread_messages(context.username, limit=20)
+# logging.info(f"Undelivered messages for '{context.username}': {unread_msgs}")
+# if unread_msgs:
+#     formatted_unread = [
+#         {
+#             "id": msg_id,
+#             "from": sender,
+#             "message": content,
+#             "timestamp": timestamp,
+#         }
+#         for msg_id, sender, content, timestamp in unread_msgs
+#     ]
+#     send_unread_messages(context.conn, formatted_unread)

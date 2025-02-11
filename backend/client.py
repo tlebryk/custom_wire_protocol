@@ -4,11 +4,11 @@ from utils import perform_handshake, WebSocketUtil
 
 
 class WebSocketClient:
-    def __init__(self, host="localhost", port=8000):
+    def __init__(self, host="localhost", port=8000, mode=None):
         self.host = host
         self.port = port
         self.socket = None
-        self.websocket = WebSocketUtil()
+        self.websocket = WebSocketUtil(mode=mode)
 
     def connect(self):
         """Establish connection and perform WebSocket handshake"""

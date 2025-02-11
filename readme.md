@@ -2,7 +2,12 @@
 
 - python 3.10 
 - run `python backend/server.py` to serve the backend. 
-- in the frontend directory, run `python3 -m http.server 8080` to serve the frontend.
+- frontend: `backend/frontend.py `
+- To test protocols: 
+- Set MODE="json" in the environment to run with json
+    `export MODE='json'
+- set MODE="custom" in environment to run with custom
+
 
 
 API specs for actions 

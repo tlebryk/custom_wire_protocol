@@ -9,67 +9,70 @@
 <body>
     <h1>WebSocket Chat with Registration and Persistent Messages</h1>
     <!-- Authentication Box -->
-    <div id="authBox">
-        <div id="registerForm">
-            <h3>Register</h3>
-            <label>Username:</label>
-            <input type="text" id="regUsername">
-            <label>Password:</label>
-            <input type="password" id="regPassword">
+    <<<<<<< HEAD=======<!-- Authentication Box -->
+        <!-- Authentication Box -->
+        >>>>>>> origin/prototype
+        <div id="authBox">
+            <div id="registerForm">
+                <h3>Register</h3>
+                <label>Username:</label>
+                <input type="text" id="regUsername">
+                <label>Password:</label>
+                <input type="password" id="regPassword">
+                <!-- Removed onclick attribute -->
+                <button>Register</button>
+                <div class="toggle-link">Already have an account? Login here.</div>
+            </div>
+
+            <div id="loginForm" class="hidden">
+                <h3>Login</h3>
+                <label>Username:</label>
+                <input type="text" id="loginUsername">
+                <label>Password:</label>
+                <input type="password" id="loginPassword">
+                <!-- Removed onclick attribute -->
+                <button>Login</button>
+                <div class="toggle-link">Don't have an account? Register here.</div>
+            </div>
+
+            <!-- Error Message Box -->
+            <div id="errorBox" class="hidden" style="color: red;"></div>
+        </div>
+        <!-- add a user input for the user to set n unread messages -->
+        <div id="nNewMessages" class="hidden">
+            <label for="userInputBox">Number of Unread Messages to Display</label>
+            <input type="number" id="userInputBox" min="0">
+            <button>Set </button>
+        </div>
+
+        <div id="chatBox" class="hidden">
+            <div id="messages"></div>
+            <input type="text" id="receiverUsername" placeholder="Receiver Username" />
+            <input type="text" id="messageText" placeholder="Type your message here..." />
             <!-- Removed onclick attribute -->
-            <button>Register</button>
-            <div class="toggle-link">Already have an account? Login here.</div>
+            <button>Send</button>
+            <div id="errorBox" class="hidden"></div>
         </div>
 
-        <div id="loginForm" class="hidden">
-            <h3>Login</h3>
-            <label>Username:</label>
-            <input type="text" id="loginUsername">
-            <label>Password:</label>
-            <input type="password" id="loginPassword">
+        <div id="messages-container" class="hidden">
+            <div id="unread-messages-section">
+                <h2>Unread Messages</h2>
+                <button id="markAllAsReadBtn">Mark all as read</button>
+                <div id="unread-messages"></div>
+            </div>
+            <div id="recent-messages-section">
+                <h2>Recent Messages</h2>
+                <div id="recent-messages"></div>
+            </div>
+        </div>
+
+        <!-- Delete button -->
+        <div id="deleteAccountContainer" class="hidden">
             <!-- Removed onclick attribute -->
-            <button>Login</button>
-            <div class="toggle-link">Don't have an account? Register here.</div>
+            <button id="deleteAccountBtn">Delete Account</button>
         </div>
 
-        <!-- Error Message Box -->
-        <div id="errorBox" class="hidden" style="color: red;"></div>
-    </div>
-    <!-- add a user input for the user to set n unread messages -->
-    <div id="nNewMessages" class="hidden">
-        <label for="userInputBox">Number of Unread Messages to Display</label>
-        <input type="number" id="userInputBox" min="0">
-        <button>Set </button>
-    </div>
-
-    <div id="chatBox" class="hidden">
-        <div id="messages"></div>
-        <input type="text" id="receiverUsername" placeholder="Receiver Username" />
-        <input type="text" id="messageText" placeholder="Type your message here..." />
-        <!-- Removed onclick attribute -->
-        <button>Send</button>
-        <div id="errorBox" class="hidden"></div>
-    </div>
-
-    <div id="messages-container" class="hidden">
-        <div id="unread-messages-section">
-            <h2>Unread Messages</h2>
-            <button id="markAllAsReadBtn">Mark all as read</button>
-            <div id="unread-messages"></div>
-        </div>
-        <div id="recent-messages-section">
-            <h2>Recent Messages</h2>
-            <div id="recent-messages"></div>
-        </div>
-    </div>
-
-    <!-- Delete button -->
-    <div id="deleteAccountContainer" class="hidden">
-        <!-- Removed onclick attribute -->
-        <button id="deleteAccountBtn">Delete Account</button>
-    </div>
-
-    <script type="module" src="scripts.js"></script>
+        <script type="module" src="scripts.js"></script>
 </body>
 
 </html>

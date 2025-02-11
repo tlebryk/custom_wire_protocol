@@ -1,7 +1,6 @@
 // handlers.js
 
 
-
 export function handleLogin(data) {
     if (data.status === "success" && data.message && data.message.includes("Login successful")) {
         window.isAuthenticated = true;

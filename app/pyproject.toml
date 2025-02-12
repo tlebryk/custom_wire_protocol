@@ -1,0 +1,16 @@
+[project]
+name = "app"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "sqlalchemy>=2.0.38"
+    "websockets>=14.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "watchfiles>=1.0.4",
+]

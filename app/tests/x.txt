@@ -1,0 +1,4 @@
+- Get the encoding just doing the encoding 
+- get the encoding when using send 
+- check the gap
+- 

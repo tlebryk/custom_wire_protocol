@@ -220,6 +220,23 @@ def set_n_unread_messages(username, n_unread_messages):
     conn.close()
     return True
 
+def delete_message(message_id):
+    """
+    Deletes a message from the database.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        logging.error(f"Error deleting message {message_id}: {e}")
+        return False
+    finally:
+        conn.close()
+
+
 
 # Initialize the database when the module is imported
 initialize_database()

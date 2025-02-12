@@ -12,6 +12,7 @@ from database import (
     mark_messages_as_read,
     get_user_info,
     set_n_unread_messages,
+    delete_message,
 )
 from datetime import datetime
 from pathlib import Path
@@ -391,6 +392,22 @@ def handle_unread_messages(context, data):
     else:
         send_error(context.conn, "Invalid username or password.")
 
+def handle_delete_message(context, data):
+    if not context.authenticated:
+        send_error(context.conn, "Authentication required. Please log in first.")
+        return
+
+    message_id = data.get("id")
+    if not isinstance(message_id, int):
+        send_error(context.conn, "Invalid message ID format.")
+        return
+
+    success = delete_message(message_id)
+    if success:
+        send_success(context.conn, {"message": "Message deleted successfully.", "action": "delete_message_success", "id": message_id})
+    else:
+        send_error(context.conn, "Failed to delete message.")
+
 
 # # Retrieve and send undelivered messages
 # undelivered_msgs = get_undelivered_messages(context.username)
@@ -432,4 +449,5 @@ ACTION_HANDLERS = {
     "echo": handle_echo,
     "get_unread_messages": handle_unread_messages,
     "get_recent_messages": handle_recent_messages,
+    "delete_message": handle_delete_message,
 }

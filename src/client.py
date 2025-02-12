@@ -54,7 +54,9 @@ class WebSocketClient:
 
     def close(self):
         """Close the WebSocket connection"""
+        print("Trying to close connection...")
         if self.socket:
+            print("Closing connection...")
             self.socket.close()
 
 

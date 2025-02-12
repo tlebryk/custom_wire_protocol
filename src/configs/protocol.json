@@ -20,7 +20,8 @@
         "get_unread_messages": 18,
         "confirm_mark_as_read": 19,
         "confirm_set_n_unread_messages": 20,
-        "confirm_send_message": 21
+        "confirm_send_message": 21,
+        "confirm_echo": 22
     },
     "messages": {
         "login": {
@@ -247,6 +248,17 @@
         },
         "confirm_set_n_unread_messages": {
             "action": "confirm_set_n_unread_messages",
+            "fields": {
+                "message": {
+                    "type": "string"
+                }
+            },
+            "status": {
+                "type": "string"
+            }
+        },
+        "confirm_echo": {
+            "action": "confirm_echo",
             "fields": {
                 "message": {
                     "type": "string"

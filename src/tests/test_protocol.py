@@ -27,81 +27,6 @@ def encoder_decoder(protocols):
     return encoder, decoder
 
 
-# TODO: Fix these tests
-
-# def test_encode_login_message(encoder_decoder):
-#     """
-#     Unit Test: Verify that encoding a 'login' message produces the expected binary output.
-#     """
-#     encoder, _ = encoder_decoder
-#     login_message = {"action": "login", "username": "Alice", "password": "secret123"}
-
-#     # Manually construct the expected binary output
-#     # Action ID for 'login' is 1 -> b'\x01'
-#     expected_encoded = struct.pack("!B", 1)  # Action ID
-
-#     # Encode 'username'
-#     username = "Alice"
-#     username_encoded = struct.pack(
-#         "!H", len(username.encode("utf-8"))
-#     ) + username.encode("utf-8")
-#     expected_encoded += username_encoded
-
-#     # Encode 'password'
-#     password = "secret123"
-#     password_encoded = struct.pack(
-#         "!H", len(password.encode("utf-8"))
-#     ) + password.encode("utf-8")
-#     expected_encoded += password_encoded
-
-#     # Encode the message using Encoder
-#     actual_encoded = encoder.encode_message(login_message)
-
-#     assert (
-#         actual_encoded == expected_encoded
-#     ), "Encoded login message does not match expected bytes."
-
-
-# def test_decode_send_message(encoder_decoder):
-#     """
-#     Unit Test: Verify that decoding a 'send_message' binary message returns the correct dictionary.
-#     """
-#     _, decoder = encoder_decoder
-
-#     # Manually construct binary data for 'send_message'
-#     # Action ID for 'send_message' is 2 -> b'\x02'
-#     action_id = 2
-#     send_message = "Hello, Bob!"
-#     receiver = "Bob"
-
-#     # Encode 'send_message'
-#     message_encoded = struct.pack(
-#         "!H", len(send_message.encode("utf-8"))
-#     ) + send_message.encode("utf-8")
-
-#     # Encode 'receiver'
-#     receiver_encoded = struct.pack(
-#         "!H", len(receiver.encode("utf-8"))
-#     ) + receiver.encode("utf-8")
-
-#     # Complete binary message
-#     binary_data = struct.pack("!B", action_id) + message_encoded + receiver_encoded
-
-#     # Expected decoded message
-#     expected_decoded = {
-#         "action": "send_message",
-#         "message": "Hello, Bob!",
-#         "receiver": "Bob",
-#     }
-
-#     # Decode the binary data
-#     actual_decoded = decoder.decode_message(binary_data)
-
-#     assert (
-#         actual_decoded == expected_decoded
-#     ), "Decoded send_message does not match expected dictionary."
-
-
 def test_encode_decode_integration(encoder_decoder):
     """
     Integration Test: Encode a message and then decode it, verifying the result matches the original message.
@@ -216,7 +141,7 @@ def test_encode_decode_message_with_list(encoder_decoder):
     # Example message with integer and list
     original_message = {
         "action": "mark_as_read",
-        "messsage_ids": [1, 2, 3],
+        "message_ids": [1, 2, 3],
     }
 
     actual_encoded = encoder.encode_message(original_message)
@@ -249,6 +174,7 @@ def test_encode_decode_message_with_object(encoder_decoder):
                 "timestamp": "2023-10-01T12:00:00Z",
             },
         ],
+        "status": "success",
     }
 
     actual_encoded = encoder.encode_message(original_message)

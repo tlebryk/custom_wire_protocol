@@ -13,7 +13,7 @@ from database import (
     get_user_info,
     set_n_unread_messages,
     delete_message,
-    get_all_users_except
+    get_all_users_except,
 )
 from datetime import datetime
 from pathlib import Path
@@ -334,8 +334,9 @@ def handle_unknown_action(context, action):
 
 # handlers.py (Add the echo handler)
 def handle_echo(context, data):
+    print("echo")
     message = data.get("message", "")
-    response = {"status": "success", "message": message}
+    response = {"status": "success", "message": message, "action": "confirm_echo"}
     send_success(context.conn, response)
 
 
@@ -403,6 +404,7 @@ def handle_unread_messages(context, data):
     else:
         send_error(context.conn, "Invalid username or password.")
 
+
 def handle_delete_message(context, data):
     if not context.authenticated:
         send_error(context.conn, "Authentication required. Please log in first.")
@@ -415,9 +417,17 @@ def handle_delete_message(context, data):
 
     success = delete_message(message_id)
     if success:
-        send_success(context.conn, {"message": "Message deleted successfully.", "action": "delete_message_success", "id": message_id})
+        send_success(
+            context.conn,
+            {
+                "message": "Message deleted successfully.",
+                "action": "delete_message_success",
+                "id": message_id,
+            },
+        )
     else:
         send_error(context.conn, "Failed to delete message.")
+
 
 def handle_get_users(context, data):
     if not context.authenticated:
@@ -426,7 +436,6 @@ def handle_get_users(context, data):
 
     users = get_all_users_except(context.username)
     send_success(context.conn, {"action": "user_list", "users": users})
-
 
 
 # # Retrieve and send undelivered messages

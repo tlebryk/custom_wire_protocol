@@ -54,6 +54,7 @@ class TestWebSocketClientServer:
             "message", ""
         ), "Error message should indicate unknown action"
 
+    @pytest.mark.timeout(10)  # Sets a 5-second timeout for the test
     def test_missing_action_field(self, client):
         """
         Test sending a message without the 'action' field and expecting an error.

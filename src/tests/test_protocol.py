@@ -4,7 +4,6 @@ import pytest
 import struct
 import sys
 
-sys.path.append("/home/tlebryk/262_distributed_systems/custom_wire_design/backend/")
 
 from custom_protocol import Encoder, load_protocols, Decoder
 
@@ -15,7 +14,7 @@ def protocols():
     Fixture to load protocols.json once for all tests.
     """
     # TODO: handle the file path better
-    return load_protocols(file_path="./configs/protocols.json")
+    return load_protocols()
 
 
 @pytest.fixture(scope="module")

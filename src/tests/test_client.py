@@ -223,7 +223,12 @@ class TestWebSocketClientCustomProtocol:
             "message": "Login successful",
         }
         mock_custom_protocol["decoder"].decode_message.return_value = decoded_msg
-        mock_websocket_util.read_ws_frame.return_value = b"encoded_response"
+        # In test_receive_custom_message
+        mock_websocket_util.read_ws_frame.return_value = {
+            "status": "success",
+            "action": "login_response",
+            "message": "Login successful",
+        }
 
         response = custom_client.receive()
 
@@ -303,7 +308,8 @@ class TestWebSocketClientCustomProtocol:
         mock_custom_protocol["encoder"].encode_message.return_value = (
             b"encoded_register_message"
         )
-        mock_custom_protocol["decoder"].decode_message.return_value = {
+        # In test_full_custom_protocol_flow
+        mock_websocket_util.read_ws_frame.return_value = {
             "status": "success",
             "action": "register_response",
             "message": "Registration successful",

@@ -220,6 +220,40 @@ def set_n_unread_messages(username, n_unread_messages):
     conn.close()
     return True
 
+def delete_message(message_id):
+    """
+    Deletes a message from the database.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        logging.error(f"Error deleting message {message_id}: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_all_users_except(username):
+    """
+    Retrieves all usernames except the given username.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT username FROM users WHERE username != ?",
+        (username,),
+    )
+    users = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    return users
+
+
+
 
 # Initialize the database when the module is imported
 initialize_database()

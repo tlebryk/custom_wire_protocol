@@ -5,10 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi>=0.115.8",
-    "psycopg2-binary>=2.9.10",
-    "sqlalchemy>=2.0.38",
-    "uvicorn>=0.34.0",
+    "sqlalchemy>=2.0.38"
     "websockets>=14.2",
 ]
 

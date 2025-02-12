@@ -4,11 +4,12 @@ from utils import perform_handshake, WebSocketUtil
 
 
 class WebSocketClient:
-    def __init__(self, host="localhost", port=8000):
+    def __init__(self, host="localhost", port=8000, mode=None):
         self.host = host
         self.port = port
         self.socket = None
-        self.websocket = WebSocketUtil()
+        self.websocket = WebSocketUtil(mode=mode)
+        # self.running = False
 
     def connect(self):
         """Establish connection and perform WebSocket handshake"""
@@ -48,6 +49,7 @@ class WebSocketClient:
 
     def receive(self):
         """Receive a message from the server"""
+
         return self.websocket.read_ws_frame(self.socket)
 
     def close(self):

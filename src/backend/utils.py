@@ -11,6 +11,7 @@ import os
 
 MAGIC_STRING = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 WS_FIN_TEXT_FRAME = 0x81  # FIN=1, Opcode=1 (text frame)
+# Opcode=1: Text frame, where the payload data is text data encoded as UTF-8
 WS_PAYLOAD_LEN_8BIT_MAX = 125  # Max payload size for a single byte length
 WS_PAYLOAD_LEN_16BIT = 126  # Indicator for 16-bit payload length
 WS_PAYLOAD_LEN_16BIT_MAX = 65535  # Max payload size for 16-bit length
@@ -102,6 +103,7 @@ class WebSocketUtil:
         self.mode = mode
         if not mode:
             self.mode = os.environ.get("MODE", "json")
+            logging.warning(f"Using mode: {self.mode}")
         if mode != "json":
             self.encoder = custom_protocol.Encoder(custom_protocol.load_protocols())
             self.decoder = custom_protocol.Decoder(custom_protocol.load_protocols())
@@ -149,7 +151,7 @@ class WebSocketUtil:
 
             if masked:
                 masking_key = conn.recv(4)
-
+            logging.warning("\n\nPayload Length: " + str(payload_len))
             payload_data = b""
             remaining = payload_len
             while remaining > 0:
@@ -169,12 +171,15 @@ class WebSocketUtil:
                 return None
             elif opcode == self.WS_OPCODE_TEXT:
                 # Text frame
-                message = payload_data.decode("utf-8", errors="ignore")
                 if self.mode == "json":
+                    message = payload_data.decode("utf-8", errors="ignore")
                     data = json.loads(message)
                 else:
                     decoder = custom_protocol.Decoder(custom_protocol.load_protocols())
-                    data = decoder.decode_message(message)
+                    logging.warning(f"READ PAYLOAD DATA: {payload_data}")
+                    data = decoder.decode_message(payload_data)
+                    logging.warning(f"READ DATA: {data}")
+
                 return data
 
             else:
@@ -186,12 +191,13 @@ class WebSocketUtil:
             print(f"[-] Error reading frame: {e}")
             return None
 
-    def send_ws_frame(self, conn, message, mode="json"):
+    def send_ws_frame(self, conn, message):
         """
         Sends a JSON-encoded text frame to the client.
         """
         try:
-            if mode == "json":
+            logging.warning(f"Sending message: {message}")
+            if self.mode == "json":
                 if isinstance(message, dict):
                     payload = json.dumps(message).encode("utf-8")
                 else:
@@ -199,10 +205,12 @@ class WebSocketUtil:
             else:
                 # TODO: handle state elsewhere
                 encoder = custom_protocol.Encoder(custom_protocol.load_protocols())
-                payload = encoder.encode(message)
-            logging.info(f"Sending frame: {payload}")
+                payload = encoder.encode_message(message)
+                logging.warning(f"WRITE PAYLOAD DATA: {payload}")
+
+            logging.warning(f"Sending frame: {payload}")
             payload_len = len(payload)
-            print(f"{payload_len}")
+            logging.warning("\n\nPayload Length: " + str(payload_len))
             frame = bytearray()
 
             # First byte: FIN=1 and opcode=1 (text)

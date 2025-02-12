@@ -13,7 +13,7 @@ from typing import Dict, Any, List
 
 # undo hardcode
 def load_protocols(
-    file_path="../configs/protocols.json",
+    file_path="./configs/protocols.json",
 ):
     with open(file_path, "r") as f:
         protocols = json.load(f)

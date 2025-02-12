@@ -15,7 +15,12 @@
         "received_message": 13,
         "request_unread_messages": 14,
         "request_recent_messages": 15,
-        "confirm_login": 16
+        "confirm_login": 16,
+        "get_recent_messages": 17,
+        "get_unread_messages": 18,
+        "confirm_mark_as_read": 19,
+        "confirm_set_n_unread_messages": 20,
+        "confirm_send_message": 21
     },
     "messages": {
         "login": {
@@ -86,8 +91,8 @@
             "fields": {
                 "messages": {
                     "type": "list",
+                    "element_type": "object",
                     "items": {
-                        "type": "object",
                         "fields": {
                             "message": {
                                 "type": "string"
@@ -103,6 +108,9 @@
                             }
                         }
                     }
+                },
+                "status": {
+                    "type": "string"
                 }
             }
         },
@@ -128,6 +136,9 @@
                             }
                         }
                     }
+                },
+                "status": {
+                    "type": "string"
                 }
             }
         },
@@ -145,7 +156,7 @@
         "mark_as_read": {
             "action": "mark_as_read",
             "fields": {
-                "messsage_ids": {
+                "message_ids": {
                     "type": "list",
                     "element_type": "int"
                 }
@@ -201,7 +212,65 @@
                 },
                 "message": {
                     "type": "string"
+                },
+                "status": {
+                    "type": "string"
                 }
+            }
+        },
+        "get_recent_messages": {
+            "action": "get_recent_messages",
+            "fields": {
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "get_unread_messages": {
+            "action": "get_unread_messages",
+            "fields": {
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "confirm_mark_as_read": {
+            "action": "confirm_mark_as_read",
+            "fields": {
+                "message": {
+                    "type": "string"
+                }
+            },
+            "status": {
+                "type": "string"
+            }
+        },
+        "confirm_set_n_unread_messages": {
+            "action": "confirm_set_n_unread_messages",
+            "fields": {
+                "message": {
+                    "type": "string"
+                }
+            },
+            "status": {
+                "type": "string"
+            }
+        },
+        "confirm_send_message": {
+            "action": "confirm_send_message",
+            "fields": {
+                "message": {
+                    "type": "string"
+                }
+            },
+            "status": {
+                "type": "string"
+            },
+            "from": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string"
             }
         }
     }

@@ -161,7 +161,7 @@ def handle_set_n_unread_messages(context, data):
             context.conn,
             {
                 "message": "Number of unread messages set successfully.",
-                "action": "set_n_unread_messages",
+                "action": "confirm_set_n_unread_messages",
             },
         )
     else:
@@ -280,7 +280,7 @@ def handle_send_message(context, data):
         "from": context.username,
         "message": message_text,
         "timestamp": datetime.utcnow().isoformat() + "Z",
-        "action": "sent_message",
+        "action": "confirm_send_message",
     }
     send_success(context.conn, response)
 
@@ -305,7 +305,7 @@ def handle_mark_as_read(context, data):
 
     send_success(
         context.conn,
-        {"message": "Messages marked as read.", "action": "mark_as_read"},
+        {"message": "Messages marked as read.", "action": "confirm_mark_as_read"},
     )
 
 
@@ -373,9 +373,19 @@ def handle_unread_messages(context, data):
     if not context.authenticated:
         send_error(context.conn, "Authentication required. Please log in first.")
         return
-
+    # TODO: set the limit based on user information
     # Retrieve and send unread messages
-    unread_msgs = get_unread_messages(context.username, limit=20)
+    user_info = get_user_info(context.username)
+    n_message_index = 1
+    if user_info:
+        n_unread_messages = user_info[n_message_index]
+        if not n_unread_messages:
+            n_unread_messages = 50
+
+    else:
+        logging.info(f"User '{context.username}' not found in database.")
+        n_unread_messages = 50
+    unread_msgs = get_unread_messages(context.username, limit=n_unread_messages)
     logging.info(f"Undelivered messages for '{context.username}': {unread_msgs}")
     if unread_msgs:
         formatted_unread = [

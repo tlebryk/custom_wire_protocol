@@ -393,6 +393,7 @@ class NNewMessages(tk.Frame):
         set_payload = {
             "action": "set_n_unread_messages",
             "n_unread_messages": int(number),
+            "username": self.username,
         }
         self.master.send_message_via_ws(set_payload)
         messagebox.showinfo(
@@ -755,7 +756,7 @@ class DeleteAccountContainer(tk.Frame):
         )
         if confirm:
             # Create the delete account payload
-            delete_payload = {"action": "delete_account"}
+            delete_payload = {"action": "delete_account", "username": self.username}
             # Send the delete account request via WebSocket
             self.master.send_message_via_ws(delete_payload)
             # Inform the user and reset the app

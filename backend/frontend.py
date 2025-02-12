@@ -140,6 +140,7 @@ class ChatApp(tk.Tk):
                     # call to get unread mesasges
                     self.get_unread_messages()
                     self.get_recent_messages()
+                    self.chat_box.fetch_users()  # Fetch users after login
                     # mesage_dict
                     self.switch_to_chat_screen()
                     logging.info(f"User '{data.get('username')}' logged in.")
@@ -188,6 +189,8 @@ class ChatApp(tk.Tk):
                     # Optionally handle confirmation of message deletion
                     logging.info(f"Message {data.get('id')} deleted successfully.")
                 # Handle other success actions as needed
+                elif action == "user_list":
+                    self.chat_box.update_user_list(data.get("users", []))
             elif status == "error":
                 error_msg = data.get("message", "An error occurred.")
                 messagebox.showerror("Error", error_msg)
@@ -413,8 +416,14 @@ class ChatBox(tk.Frame):
         receiver_frame = tk.Frame(self)
         receiver_frame.pack(pady=5)
         tk.Label(receiver_frame, text="Receiver Username:").pack(side=tk.LEFT, padx=5)
-        self.receiver_username = tk.Entry(receiver_frame)
-        self.receiver_username.pack(side=tk.LEFT, padx=5)
+        self.user_list = []
+        self.selected_user = tk.StringVar(self)
+        self.selected_user.set("Select a user")  # Default placeholder
+        self.user_dropdown = tk.OptionMenu(receiver_frame, self.selected_user, "Select a user", *self.user_list)
+        self.user_dropdown.pack(side=tk.LEFT, padx=5)
+
+        tk.Button(receiver_frame, text="Refresh", command=self.fetch_users).pack(side=tk.LEFT, padx=5)
+
 
         # Message Text
         message_frame = tk.Frame(self)
@@ -433,7 +442,7 @@ class ChatBox(tk.Frame):
         self.error_box.pack_forget()  # Initially hidden
 
     def send_message(self):
-        receiver = self.receiver_username.get().strip()
+        receiver = self.selected_user.get()
         message = self.message_text.get().strip()
         if not receiver or not message:
             self.display_error("Receiver and message cannot be empty.")
@@ -449,7 +458,6 @@ class ChatBox(tk.Frame):
         # Display the sent message in the messages display
         # self.display_message(f"To {receiver}: {message}")
         # Clear input fields
-        self.receiver_username.delete(0, tk.END)
         self.message_text.delete(0, tk.END)
 
     def display_message(self, message):
@@ -460,6 +468,33 @@ class ChatBox(tk.Frame):
     def display_error(self, message):
         self.error_box.config(text=message)
         self.error_box.pack()
+
+    def update_user_list(self, users):
+        """
+        Updates the dropdown with the latest list of users.
+        """
+        if not users:
+            self.selected_user.set("No users available")
+            return
+
+        self.user_list = users
+        self.selected_user.set(users[0])  # Set the first user as default
+
+        menu = self.user_dropdown["menu"]
+        menu.delete(0, "end")  # Clear previous entries
+
+        for user in users:
+            menu.add_command(label=user, command=lambda value=user: self.selected_user.set(value))
+
+
+    def fetch_users(self):
+        """
+        Sends a request to fetch all users except the logged-in user.
+        """
+        self.master.send_message_via_ws({"action": "get_users"})
+
+
+
 
 
 class MessagesContainer(tk.Frame):

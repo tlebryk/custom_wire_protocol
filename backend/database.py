@@ -236,6 +236,23 @@ def delete_message(message_id):
     finally:
         conn.close()
 
+def get_all_users_except(username):
+    """
+    Retrieves all usernames except the given username.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT username FROM users WHERE username != ?",
+        (username,),
+    )
+    users = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    return users
+
+
 
 
 # Initialize the database when the module is imported

@@ -13,6 +13,7 @@ from database import (
     get_user_info,
     set_n_unread_messages,
     delete_message,
+    get_all_users_except
 )
 from datetime import datetime
 from pathlib import Path
@@ -408,6 +409,15 @@ def handle_delete_message(context, data):
     else:
         send_error(context.conn, "Failed to delete message.")
 
+def handle_get_users(context, data):
+    if not context.authenticated:
+        send_error(context.conn, "Authentication required. Please log in first.")
+        return
+
+    users = get_all_users_except(context.username)
+    send_success(context.conn, {"action": "user_list", "users": users})
+
+
 
 # # Retrieve and send undelivered messages
 # undelivered_msgs = get_undelivered_messages(context.username)
@@ -450,4 +460,5 @@ ACTION_HANDLERS = {
     "get_unread_messages": handle_unread_messages,
     "get_recent_messages": handle_recent_messages,
     "delete_message": handle_delete_message,
+    "get_users": handle_get_users,
 }

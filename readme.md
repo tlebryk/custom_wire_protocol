@@ -1,7 +1,7 @@
 
 
 - python 3.10 
-- run `python backend/server.py` to serve the backend. 
+- run `python3 backend/server.py` to serve the backend. 
 - frontend: `backend/frontend.py `
 - To test protocols: 
 - Set MODE="json" in the environment to run with json

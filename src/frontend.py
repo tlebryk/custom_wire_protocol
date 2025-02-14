@@ -30,7 +30,7 @@ class ChatApp(tk.Tk):
         super().__init__()
 
         self.title("WebSocket Chat - Registration and Login")
-        self.geometry("800x600")
+        self.geometry("800x800")
         self.resizable(False, False)
 
         # Initialize WebSocket client

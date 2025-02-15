@@ -184,7 +184,8 @@ class ChatApp(tk.Tk):
                         "Account Deleted",
                         data.get("message", "Your account has been deleted."),
                     )
-                    self.reset_app()
+                    sys.exit()  # Close the app instead of resetting
+
                 elif action == "delete_message_success":
                     # Optionally handle confirmation of message deletion
                     logging.info(f"Message {data.get('id')} deleted successfully.")
@@ -223,14 +224,7 @@ class ChatApp(tk.Tk):
         """
         messagebox.showerror("WebSocket Error", error)
 
-    def handle_close(self):
-        """
-        Handles the WebSocket connection closing.
-        """
-        messagebox.showinfo(
-            "WebSocket Closed", "The connection to the server has been closed."
-        )
-        self.reset_app()
+
 
     def switch_to_chat_screen(self):
         """
@@ -241,21 +235,11 @@ class ChatApp(tk.Tk):
         self.auth_box.login_form.pack_forget()
         self.auth_box.register_form.pack_forget()
         self.auth_box.toggle_button.pack_forget()
+        self.delete_account_container.pack(pady=10)
         self.n_new_messages.pack(pady=10)
         self.chat_box.pack(pady=10)
         self.messages_container.pack(pady=10)
-        self.delete_account_container.pack(pady=10)
 
-    def reset_app(self):
-        """
-        Resets the application to its initial state.
-        """
-        self.n_new_messages.pack_forget()
-        self.chat_box.pack_forget()
-        self.messages_container.pack_forget()
-        self.delete_account_container.pack_forget()
-        self.auth_box.show_register()
-        self.auth_box.pack(pady=20)
 
     def on_closing(self):
         # If needed, close the socket or signal the listening thread to exit
@@ -796,7 +780,9 @@ class DeleteAccountContainer(tk.Frame):
             self.master.send_message_via_ws(delete_payload)
             # Inform the user and reset the app
             messagebox.showinfo("Delete Account", "Your account has been deleted.")
-            self.master.reset_app()
+            sys.exit()
+
+            
 
 
 if __name__ == "__main__":

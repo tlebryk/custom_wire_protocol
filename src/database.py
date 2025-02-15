@@ -3,6 +3,7 @@ import sqlite3
 import os
 from datetime import datetime
 import logging
+from typing import List, Tuple, Optional, Union, Dict
 
 DB_FILE = "chat_app.db"
 
@@ -46,9 +47,17 @@ def initialize_database():
     conn.close()
 
 
-def insert_message(sender, content, receiver):
+def insert_message(sender: str, content: str, receiver: str) -> int:
     """
     Inserts a new message into the messages table.
+
+    Args:
+        sender (str): The username of the user sending the message.
+        content (str): The content of the message.
+        receiver (str): The username of the user receiving the message.
+
+    Returns:
+        int: The ID of the newly inserted message.
     """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -70,9 +79,18 @@ def insert_message(sender, content, receiver):
     return message_id
 
 
-def get_recent_messages(user_id, limit=50):
+def get_recent_messages(
+    user_id: str, limit: int = 50
+) -> List[Tuple[str, str, str, str, int]]:
     """
     Retrieves the most recent messages from the messages table.
+
+    Args:
+        user_id (str): The user ID of the user whose messages to retrieve
+        limit (int): The maximum number of messages to retrieve. Defaults to 50.
+
+    Returns:
+        List[Tuple[str, str, str, str, int]]: A list of tuples, each containing the sender, content, receiver, timestamp, and id of a message, sorted from oldest to newest.
     """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -104,9 +122,15 @@ def get_recent_messages(user_id, limit=50):
     return rows[::-1]
 
 
-def get_undelivered_messages(user_id):
+def get_undelivered_messages(user_id: str) -> List[Tuple[str, str, str, int]]:
     """
     Retrieves all undelivered messages for a user.
+
+    Args:
+        user_id (str): The user ID of the user whose undelivered messages to retrieve.
+
+    Returns:
+        List[Tuple[str, str, str, int]]: A list of tuples, each containing the sender, content, timestamp, and id of an undelivered message, sorted from oldest to newest.
     """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -127,9 +151,15 @@ def get_undelivered_messages(user_id):
     return messages
 
 
-def mark_messages_delivered(user_id):
+def mark_messages_delivered(user_id: str) -> None:
     """
     Marks all undelivered messages for a user as delivered.
+
+    Args:
+        user_id (str): The user ID of the user whose undelivered messages to mark as delivered.
+
+    Returns:
+        None
     """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -147,9 +177,18 @@ def mark_messages_delivered(user_id):
     conn.close()
 
 
-def get_unread_messages(user_id, limit=20):
+def get_unread_messages(
+    user_id: str, limit: int = 20
+) -> List[Tuple[int, str, str, str]]:
     """
     Retrieves the first 'limit' unread messages for a user.
+
+    Args:
+        user_id (str): The user ID of the user whose unread messages to retrieve.
+        limit (int): The maximum number of messages to retrieve. Defaults to 20.
+
+    Returns:
+        List[Tuple[int, str, str, str]]: A list of tuples, each containing the ID, sender, content, and timestamp of an unread message, sorted from oldest to newest.
     """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -165,15 +204,21 @@ def get_unread_messages(user_id, limit=20):
         (user_id, limit),
     )
 
-    messages = cursor.fetchall()
+    messages: List[Tuple[int, str, str, str]] = cursor.fetchall()
     conn.close()
 
     return messages
 
 
-def mark_messages_as_read(message_ids):
+def mark_messages_as_read(message_ids: List[int]) -> None:
     """
     Marks specified messages as read.
+
+    Args:
+        message_ids (List[int]): A list of message IDs to mark as read.
+
+    Returns:
+        None
     """
     if not message_ids:
         return  # No messages to mark
@@ -193,7 +238,16 @@ def mark_messages_as_read(message_ids):
 
 
 #  get user information
-def get_user_info(username):
+def get_user_info(username: str) -> Optional[Tuple[str, int]]:
+    """
+    Retrieves user information, specifically the username and the number of unread messages.
+
+    Args:
+        username (str): The username to retrieve information for.
+
+    Returns:
+        Optional[Tuple[str, int]]: A tuple of the username and the number of unread messages, or None if the user does not exist.
+    """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
@@ -207,7 +261,17 @@ def get_user_info(username):
     return user_info
 
 
-def set_n_unread_messages(username, n_unread_messages):
+def set_n_unread_messages(username: str, n_unread_messages: int) -> bool:
+    """
+    Updates the number of unread messages for a user.
+
+    Args:
+        username (str): The username to update.
+        n_unread_messages (int): The new number of unread messages for the user.
+
+    Returns:
+        bool: True if the update was successful, False otherwise.
+    """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
@@ -220,9 +284,16 @@ def set_n_unread_messages(username, n_unread_messages):
     conn.close()
     return True
 
-def delete_message(message_id):
+
+def delete_message(message_id: int) -> bool:
     """
     Deletes a message from the database.
+
+    Args:
+        message_id (int): The ID of the message to delete.
+
+    Returns:
+        bool: True if the deletion was successful, False otherwise.
     """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -236,9 +307,16 @@ def delete_message(message_id):
     finally:
         conn.close()
 
-def get_all_users_except(username):
+
+def get_all_users_except(username: str) -> List[str]:
     """
     Retrieves all usernames except the given username.
+
+    Args:
+        username (str): The username to exclude.
+
+    Returns:
+        List[str]: A list of all usernames except the given username.
     """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -251,8 +329,6 @@ def get_all_users_except(username):
     conn.close()
 
     return users
-
-
 
 
 # Initialize the database when the module is imported

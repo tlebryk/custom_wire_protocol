@@ -6,8 +6,6 @@ from users import register_user, authenticate_user, delete_account
 from database import (
     insert_message,
     get_recent_messages,
-    get_undelivered_messages,
-    mark_messages_delivered,
     get_unread_messages,
     mark_messages_as_read,
     get_user_info,
@@ -16,9 +14,9 @@ from database import (
     get_all_users_except,
 )
 from datetime import datetime
-from pathlib import Path
 import traceback
-import custom_protocol
+import socket
+from typing import Dict, Any, Optional, Union, List
 
 # Global dictionary to track online users
 # Key: username, Value: connection object
@@ -35,19 +33,33 @@ class ClientContext:
     Encapsulates the state of a connected client.
     """
 
-    def __init__(self, conn, addr):
+    def __init__(self, conn: socket.socket, addr: tuple) -> None:
+        """
+        Initializes the ClientContext object.
+
+        :param conn: The socket connection to the client.
+        :type conn: socket.socket
+        :param addr: The address of the connected client.
+        :type addr: tuple
+        """
         self.conn = conn
         self.addr = addr
         self.authenticated = False
         self.username = None
 
 
-def handle_client_connection(conn, addr):
+def handle_client_connection(conn: socket.socket, addr: tuple) -> None:
     """
     Handles a new client connection:
       1. Performs the WebSocket handshake.
       2. Manages user registration and login workflows.
       3. Processes other actions (like send_message) only if authenticated.
+
+    :param conn: The socket connection to the client.
+    :type conn: socket.socket
+    :param addr: The address of the connected client.
+    :type addr: tuple
+    :return: None
     """
     logging.info(f"[+] Client connected: {addr}")
     if not perform_handshake(conn):
@@ -93,38 +105,60 @@ def handle_client_connection(conn, addr):
         logging.info(f"[-] Connection closed for {addr}")
 
 
-def send_success(conn, payload_dict=None):
+def send_success(conn: socket.socket, payload_dict: Dict[str, Any] = None) -> None:
     """
     Helper to send a JSON response with status=success.
+
+    :param conn: The socket connection to the client.
+    :type conn: socket.socket
+    :param payload_dict: Optional dictionary of additional data to send.
+    :type payload_dict: Dict[str, Any]
+    :return: None
     """
-    # TODO: make this less flexible
     if payload_dict is None:
         payload_dict = {}
     payload_dict["status"] = "success"
-    # payload_dict["action"] = "success"
     websocket.send_ws_frame(conn, payload_dict)
 
 
-def send_error(conn, message):
+def send_error(conn: socket.socket, message: str) -> None:
     """
     Helper to send a JSON response with status=error.
+
+    :param conn: The socket connection to the client.
+    :type conn: socket.socket
+    :param message: The error message to be sent.
+    :type message: str
+    :return: None
     """
     payload_dict = {"status": "error", "message": message, "action": "error"}
     websocket.send_ws_frame(conn, payload_dict)
 
 
-def send_recent_messages(conn, messages):
+def send_recent_messages(conn: socket.socket, messages: List[Dict[str, Any]]) -> None:
     """
     Sends recent messages to the client after successful login.
+
+    :param conn: The socket connection to the client.
+    :type conn: socket.socket
+    :param messages: A list of message dictionaries, each containing at least 'from', 'message', 'timestamp', and 'id'.
+    :type messages: List[Dict[str, Any]]
+    :return: None
     """
     logging.warning(f"Sending recent messages: {messages}")
     payload = {"action": "recent_messages", "messages": messages}
     send_success(conn, payload)
 
 
-def send_unread_messages(conn, messages):
+def send_unread_messages(conn: socket.socket, messages: List[Dict[str, Any]]) -> None:
     """
     Sends unread messages to the client after successful login.
+
+    :param conn: The socket connection to the client.
+    :type conn: socket.socket
+    :param messages: A list of message dictionaries, each containing at least 'from', 'message', 'timestamp', and 'id'.
+    :type messages: List[Dict[str, Any]]
+    :return: None
     """
     logging.warning(f"Sending unread messages: {messages}")
 
@@ -132,10 +166,16 @@ def send_unread_messages(conn, messages):
     send_success(conn, payload)
 
 
-# TODO: add codes to all responses
+def handle_register(context: ClientContext, data: Dict[str, Any]) -> None:
+    """
+    Handles the registration of a new user.
 
-
-def handle_register(context, data):
+    :param context: The context of the client, containing the connection and other information.
+    :type context: ClientContext
+    :param data: A dictionary containing the registration data.
+    :type data: Dict[str, Any]
+    :return: None
+    """
     reg_username = data.get("username")
     reg_password = data.get("password")
     if not reg_username or not reg_password:
@@ -149,7 +189,16 @@ def handle_register(context, data):
         send_error(context.conn, message)
 
 
-def handle_set_n_unread_messages(context, data):
+def handle_set_n_unread_messages(context: ClientContext, data: Dict[str, Any]) -> None:
+    """
+    Handles the request from the client to set the number of unread messages.
+
+    :param context: The context of the client, containing the connection and other information.
+    :type context: ClientContext
+    :param data: A dictionary containing the number of unread messages to set.
+    :type data: Dict[str, Any]
+    :return: None
+    """
     n_unread_messages = data.get("n_unread_messages")
     username = context.username
 
@@ -170,14 +219,23 @@ def handle_set_n_unread_messages(context, data):
         send_error(context.conn, "Failed to set number of unread messages.")
 
 
-def handle_login(context, data):
-    login_username = data.get("username")
-    login_password = data.get("password")
+def handle_login(context: ClientContext, data: Dict[str, Any]) -> None:
+    """
+    Handles the login of an existing user.
+
+    :param context: The context of the client, containing the connection and other information.
+    :type context: ClientContext
+    :param data: A dictionary containing the login data.
+    :type data: Dict[str, Any]
+    :return: None
+    """
+    login_username: str = data.get("username")
+    login_password: str = data.get("password")
     if not login_username or not login_password:
         send_error(context.conn, "Username and password are required for login.")
         return
 
-    success = authenticate_user(login_username, login_password)
+    success: bool = authenticate_user(login_username, login_password)
     if success:
         context.authenticated = True
         context.username = login_username
@@ -196,46 +254,25 @@ def handle_login(context, data):
             online_users[context.username] = context.conn
             logging.warning(f"User '{context.username}' added to online users.")
 
-        # Retrieve and send undelivered messages
-        # undelivered_msgs = get_undelivered_messages(context.username)
-        # logging.warning(
-        #     f"Undelivered messages for '{context.username}': {undelivered_msgs}"
-        # )
-
-        # if undelivered_msgs:
-        #     formatted_undelivered = [
-        #         {"from": sender, "message": content, "timestamp": timestamp}
-        #         for sender, content, timestamp, id in undelivered_msgs
-        #     ]
-        #     send_recent_messages(context.conn, formatted_undelivered)
-        #     # Mark messages as delivered
-        #     mark_messages_delivered(context.username)
-
-        # # Retrieve and send unread messages
-        # unread_msgs = get_unread_messages(context.username, limit=20)
-        # logging.warning(f"unread messages for '{context.username}': {unread_msgs}")
-        # if unread_msgs:
-        #     formatted_unread = [
-        #         {
-        #             "id": msg_id,
-        #             "from": sender,
-        #             "message": content,
-        #             "timestamp": timestamp,
-        #         }
-        #         for msg_id, sender, content, timestamp in unread_msgs
-        #     ]
-        #     send_unread_messages(context.conn, formatted_unread)
     else:
         send_error(context.conn, "Invalid username or password.")
 
 
-def handle_send_message(context, data):
+def handle_send_message(context: ClientContext, data: Dict[str, Any]) -> None:
+    """
+    Handles a new message from a user to another user.
+
+    :param context: The context of the client, containing the connection and other information.
+    :type context: ClientContext
+    :param data: A dictionary containing the message data.
+    :type data: Dict[str, Any]
+    :return: None
+    """
+    receiver: str = data.get("receiver")
+    message_text: str = data.get("message", "")
     if not context.authenticated:
         send_error(context.conn, "Authentication required. Please log in first.")
         return
-
-    receiver = data.get("receiver")
-    message_text = data.get("message", "")
     if not receiver:
         send_error(context.conn, "Receiver username is required.")
         return
@@ -244,15 +281,15 @@ def handle_send_message(context, data):
         return
 
     # Insert the message into the database
-    id = insert_message(context.username, message_text, receiver)
+    id: int = insert_message(context.username, message_text, receiver)
     logging.info(f"Message inserted with ID: {id}")
     # Check if receiver is online
     with online_users_lock:
-        receiver_conn = online_users.get(receiver)
+        receiver_conn: Optional[ClientContext] = online_users.get(receiver)
 
     if receiver_conn:
         # Receiver is online; send the message
-        message_payload = {
+        message_payload: Dict[str, Any] = {
             "from": context.username,
             "message": message_text,
             "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -277,7 +314,7 @@ def handle_send_message(context, data):
         )
 
     # Echo the message back to the sender as confirmation
-    response = {
+    response: Dict[str, Any] = {
         "status": "success",
         "from": context.username,
         "message": message_text,
@@ -287,7 +324,17 @@ def handle_send_message(context, data):
     send_success(context.conn, response)
 
 
-def handle_mark_as_read(context, data):
+def handle_mark_as_read(context: ClientContext, data: Dict[str, Any]) -> None:
+    """
+    Handles the 'mark_as_read' action.
+
+    Args:
+        context (ClientContext): The client's connection context.
+        data (Dict[str, Any]): A dictionary containing the message IDs to mark as read.
+
+    Returns:
+        None
+    """
     if not context.authenticated:
         send_error(context.conn, "Authentication required. Please log in first.")
         return
@@ -311,7 +358,17 @@ def handle_mark_as_read(context, data):
     )
 
 
-def handle_delete_account(context, data):
+def handle_delete_account(context: ClientContext, data: Dict[str, Any]) -> None:
+    """
+    Handles the 'delete_account' action.
+
+    Args:
+        context (ClientContext): The client's connection context.
+        data (Dict[str, Any]): A dictionary containing the account information.
+
+    Returns:
+        None
+    """
     if not context.authenticated:
         send_error(context.conn, "Authentication required. Please log in first.")
         return
@@ -328,13 +385,32 @@ def handle_delete_account(context, data):
         send_error(context.conn, "Failed to delete account.")
 
 
-def handle_unknown_action(context, action):
+def handle_unknown_action(context: ClientContext, action: str) -> None:
+    """
+    Handles an unknown action by sending an error message.
+
+    Args:
+        context (ClientContext): The client's connection context.
+        action (str): The unknown action.
+
+    Returns:
+        None
+    """
     send_error(context.conn, f"Unknown action '{action}'.")
 
 
 # handlers.py (Add the echo handler)
-def handle_echo(context, data):
-    print("echo")
+def handle_echo(context: ClientContext, data: Dict[str, Any]) -> None:
+    """
+    Handles the echo action by sending a confirmation message back to the client.
+
+    Args:
+        context (ClientContext): The client's connection context.
+        data (Dict[str, Any]): A dictionary containing the echo message.
+
+    Returns:
+        None
+    """
     message = data.get("message", "")
     response = {"status": "success", "message": message, "action": "confirm_echo"}
     send_success(context.conn, response)
@@ -343,7 +419,17 @@ def handle_echo(context, data):
 # Dispatcher mapping actions to handler functions
 
 
-def handle_recent_messages(context, data):
+def handle_recent_messages(context: ClientContext, data: Dict[str, Any]) -> None:
+    """
+    Handles the 'recent_messages' action by retrieving and sending recent messages.
+
+    Args:
+        context (ClientContext): The client's connection context.
+        data (Dict[str, Any]): A dictionary containing the request information.
+
+    Returns:
+        None
+    """
     if not context.authenticated:
         send_error(context.conn, "Authentication required. Please log in first.")
         return
@@ -372,11 +458,21 @@ def handle_recent_messages(context, data):
     send_recent_messages(context.conn, formatted_msgs)
 
 
-def handle_unread_messages(context, data):
+def handle_unread_messages(context: ClientContext, data: Dict[str, Any]) -> None:
+    """
+    Handles the 'unread_messages' action by retrieving and sending unread messages.
+
+    Args:
+        context (ClientContext): The client's connection context.
+        data (Dict[str, Any]): A dictionary containing the request information.
+
+    Returns:
+        None
+    """
     if not context.authenticated:
         send_error(context.conn, "Authentication required. Please log in first.")
         return
-    # TODO: set the limit based on user information
+
     # Retrieve and send unread messages
     user_info = get_user_info(context.username)
     n_message_index = 1
@@ -388,6 +484,7 @@ def handle_unread_messages(context, data):
     else:
         logging.info(f"User '{context.username}' not found in database.")
         n_unread_messages = 50
+
     unread_msgs = get_unread_messages(context.username, limit=n_unread_messages)
     logging.info(f"Undelivered messages for '{context.username}': {unread_msgs}")
     if unread_msgs:
@@ -402,10 +499,28 @@ def handle_unread_messages(context, data):
         ]
         send_unread_messages(context.conn, formatted_unread)
     else:
-        send_error(context.conn, "Invalid username or password.")
+        # bug fix: Instead of sending "Invalid username or password.", send an empty list
+        send_success(
+            context.conn,
+            {
+                "action": "unread_messages",
+                "messages": [],
+                "message": "No unread messages.",
+            },
+        )
 
 
-def handle_delete_message(context, data):
+def handle_delete_message(context: ClientContext, data: Dict[str, Any]) -> None:
+    """
+    Handles a request to delete a message.
+
+    Args:
+        context (ClientContext): The client connection context.
+        data (Dict[str, Any]): A dictionary containing the message id to delete.
+
+    Returns:
+        None
+    """
     if not context.authenticated:
         send_error(context.conn, "Authentication required. Please log in first.")
         return
@@ -429,7 +544,17 @@ def handle_delete_message(context, data):
         send_error(context.conn, "Failed to delete message.")
 
 
-def handle_get_users(context, data):
+def handle_get_users(context: ClientContext, data: Dict[str, Any]) -> None:
+    """
+    Handles a request to get a list of all users except the logged-in user.
+
+    Args:
+        context (ClientContext): The client connection context.
+        data (Dict[str, Any]): A dictionary containing the request information.
+
+    Returns:
+        None
+    """
     if not context.authenticated:
         send_error(context.conn, "Authentication required. Please log in first.")
         return
@@ -438,35 +563,6 @@ def handle_get_users(context, data):
     send_success(context.conn, {"action": "user_list", "users": users})
 
 
-# # Retrieve and send undelivered messages
-# undelivered_msgs = get_undelivered_messages(context.username)
-# logging.info(
-#     f"Undelivered messages for '{context.username}': {undelivered_msgs}"
-# )
-
-# if undelivered_msgs:
-#     formatted_undelivered = [
-#         {"from": sender, "message": content, "timestamp": timestamp}
-#         for sender, content, timestamp, id in undelivered_msgs
-#     ]
-#     send_recent_messages(context.conn, formatted_undelivered)
-#     # Mark messages as delivered
-#     mark_messages_delivered(context.username)
-
-# # Retrieve and send unread messages
-# unread_msgs = get_unread_messages(context.username, limit=20)
-# logging.info(f"Undelivered messages for '{context.username}': {unread_msgs}")
-# if unread_msgs:
-#     formatted_unread = [
-#         {
-#             "id": msg_id,
-#             "from": sender,
-#             "message": content,
-#             "timestamp": timestamp,
-#         }
-#         for msg_id, sender, content, timestamp in unread_msgs
-#     ]
-#     send_unread_messages(context.conn, formatted_unread)
 ACTION_HANDLERS = {
     "register": handle_register,
     "login": handle_login,
@@ -474,7 +570,6 @@ ACTION_HANDLERS = {
     "mark_as_read": handle_mark_as_read,
     "delete_account": handle_delete_account,
     "set_n_unread_messages": handle_set_n_unread_messages,
-    # "get_user_info": handle_get_user_info,
     "echo": handle_echo,
     "get_unread_messages": handle_unread_messages,
     "get_recent_messages": handle_recent_messages,

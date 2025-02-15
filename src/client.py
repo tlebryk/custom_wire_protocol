@@ -1,6 +1,7 @@
 import socket
 import json
 from utils import perform_handshake, WebSocketUtil
+from typing import Union, Dict, Any
 
 
 class WebSocketClient:
@@ -40,8 +41,12 @@ class WebSocketClient:
             print(f"Connection failed: {e}")
             return False
 
-    def send(self, message):
-        """Send a message to the server"""
+    def send(self, message: Union[Dict, str]) -> None:
+        """Send a message to the server
+
+        Args:
+            message (Union[dict, str]): The message to send. If a dict, it will be sent as a JSON-encoded text frame. If a str, it will be sent as a text frame with the string as the payload.
+        """
         if isinstance(message, dict):
             self.websocket.send_ws_frame(self.socket, message)
         else:

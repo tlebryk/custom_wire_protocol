@@ -8,6 +8,8 @@ import logging
 import custom_protocol
 import traceback
 import os
+import socket
+from typing import Dict, Any, Optional, Union
 
 MAGIC_STRING = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 WS_FIN_TEXT_FRAME = 0x81  # FIN=1, Opcode=1 (text frame)
@@ -31,11 +33,17 @@ WS_OPCODE_CLOSE = 0x8  # Opcode for Close Frame
 WS_OPCODE_TEXT = 0x1  # Opcode for Text Frame
 
 
-def perform_handshake(conn):
+def perform_handshake(conn: socket.socket) -> bool:
     """
     Reads the client's HTTP handshake request, parses out the Sec-WebSocket-Key,
     and responds with the appropriate 101 Switching Protocols and
     Sec-WebSocket-Accept header.
+
+    Args:
+        conn (socket.socket): The socket connection to the client.
+
+    Returns:
+        bool: True if the handshake was successful, False otherwise.
     """
     try:
         request = conn.recv(1024).decode("utf-8", errors="ignore")
@@ -66,9 +74,15 @@ def perform_handshake(conn):
         return False
 
 
-def generate_accept_key(key):
+def generate_accept_key(key: str) -> str:
     """
     Generates Sec-WebSocket-Accept from Sec-WebSocket-Key.
+
+    Args:
+        key (str): The Sec-WebSocket-Key to generate the accept key from.
+
+    Returns:
+        str: The generated Sec-WebSocket-Accept key.
     """
     combined = key + MAGIC_STRING
     sha1 = hashlib.sha1(combined.encode("utf-8")).digest()
@@ -111,9 +125,16 @@ class WebSocketUtil:
             self.encoder = None
             self.decoder = None
 
-    def handshake(self, conn, key):
+    def handshake(self, conn: socket.socket, key: str) -> bool:
         """
         Performs the initial WebSocket handshake.
+
+        Args:
+            conn (socket.socket): The socket connection to the client.
+            key (str): The Sec-WebSocket-Key to generate the accept key from.
+
+        Returns:
+            bool: True if the handshake was successful, False otherwise.
         """
         response = generate_accept_key(key)
         response += "Upgrade: websocket\r\n"
@@ -121,10 +142,16 @@ class WebSocketUtil:
         conn.sendall(response.encode("utf-8"))
         return True
 
-    def read_ws_frame(self, conn):
+    def read_ws_frame(self, conn: socket.socket) -> Dict[str, Any]:
         """
-        Reads a single WebSocket frame and returns the decoded payload as a string.
+        Reads a single WebSocket frame and returns the decoded payload as a dictionary.
         Returns None if connection is closed or on error.
+
+        Args:
+            conn (socket.socket): The socket connection to the client.
+
+        Returns:
+            Dict[str, Any] or None: The decoded payload as a dictionary, or None if connection is closed or on error.
         """
         try:
             # Read the first two bytes of the frame
@@ -151,7 +178,7 @@ class WebSocketUtil:
 
             if masked:
                 masking_key = conn.recv(4)
-            logging.warning("\n\nPayload Length: " + str(payload_len))
+            logging.warning(f"\n\nPayload Length: {payload_len}")
             payload_data = b""
             remaining = payload_len
             while remaining > 0:
@@ -191,9 +218,13 @@ class WebSocketUtil:
             print(f"[-] Error reading frame: {e}")
             return None
 
-    def send_ws_frame(self, conn, message):
+    def send_ws_frame(self, conn: socket.socket, message: Union[dict, str]) -> None:
         """
         Sends a JSON-encoded text frame to the client.
+
+        :param conn: The socket connection to send the frame over
+        :param message: The message to encode and send, either a dictionary or a string
+        :return: None
         """
         try:
             logging.warning(f"Sending message: {message}")
@@ -203,7 +234,6 @@ class WebSocketUtil:
                 else:
                     payload = str(message).encode("utf-8")
             else:
-                # TODO: handle state elsewhere
                 encoder = custom_protocol.Encoder(custom_protocol.load_protocols())
                 payload = encoder.encode_message(message)
                 logging.warning(f"WRITE PAYLOAD DATA: {payload}")

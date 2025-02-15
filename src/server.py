@@ -12,6 +12,7 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],  # Log to stdout
 )
 
+# change host to your server's IP address in run server on multiple machines
 HOST = "0.0.0.0"
 PORT = 8000
 

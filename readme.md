@@ -1,11 +1,12 @@
-# App Backend
+# Custom Wire Protocol Chat Application
 
-This repository contains the backend components for the App project. It provides a basic TCP server, a graphical client interface, and protocol testing functionality. Follow the instructions below to set up and run the project.
+This repository contains a basic TCP server, a graphical client interface, and protocol testing functionality. Follow the instructions below to set up and run the project.
 
 ## Prerequisites
 
 - [Python 3.10](https://www.python.org/downloads/) or higher
-- No additional libraries beyond standard libraries. 
+- No additional libraries beyond standard libraries for running the application.
+-  To test the application, install pytest (pip install pytest).
 
 ## Installation
 
@@ -16,7 +17,7 @@ This repository contains the backend components for the App project. It provides
 ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows use: venv\Scripts\activate
-   pip install -e .
+   pip install pytest 
 
 ```
 
@@ -26,6 +27,7 @@ This repository contains the backend components for the App project. It provides
 src/
 ├── server.py          # Main server ensuring TCP connections for WebSocket communication.
 ├── handlers.py        # Routing to process received requests for the server.
+├── users.py           # Extra password & account handling. 
 ├── database.py        # Persistent storage for users and messages.
 ├── frontend.py        # GUI application using Tkinter; supports chat functionality.
 ├── client.py          # Frontend WebSocket client.
@@ -90,6 +92,15 @@ export MODE='custom'
 
 _If the `MODE` variable is not specified, the frontend will try to determine it from the system’s environment variables and default to JSON._
 
+Performance varies based on the message being sent, but we found a 45% reduction in size of data transfered over the wire using the custom protocol compared to json with the following simple packet: 
+```json
+{
+   "action": "login",
+   "username": "a",
+   "password": "a"
+}
+```
+
 ## Running on Multiple Devices
 
 You can run the application on multiple machines. Follow these steps:
@@ -127,12 +138,10 @@ On the **server computer**, open **Command Prompt (Windows)** or **Terminal (Mac
 
 #### Step 2: Update `server.py` with the Server’s IP
 
-Open `server.py` and modify the `HOST` variable if needed:
+Modify your HOST environment variable with your IP address. 
 
-```python
-HOST = "0.0.0.0"
-PORT = 8000
-
+```bash
+export HOST='172.11.11.1'
 ```
 
 ### 2. Connect Clients from Other Computers
@@ -141,13 +150,11 @@ Each client computer must connect to the server using its **local IP address**.
 
 #### Step 1: Update `client.py` with the Server’s IP
 
-On each **client computer**, modify the connection setup in `client.py`:
+On each **client computer**, modify the connection setup in `client.py` to connect to the server's IP:
 
-```python
-client = WebSocketClient(host="YOUR_SERVER_IP", port=8000)  # Replace YOUR_SERVER_IP with the server's local IP
-
+```bash
+export HOST='172.11.11.1'
 ```
-
 #### Step 2: Run the Client
 
 On each **client computer**, run:
@@ -158,3 +165,6 @@ python client.py
 ```
 _Note: The server computer can also act as a client, and multiple clients can connect to the same server concurrently._
 ```
+
+## Engineering notebook: 
+https://docs.google.com/document/d/1JtPzRj3rhguNx7oXOzPTn3823a7jsuBHUxpW0L8DIa0/edit?usp=sharing

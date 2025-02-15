@@ -2,10 +2,13 @@ import socket
 import json
 from utils import perform_handshake, WebSocketUtil
 from typing import Union, Dict, Any
+import os
 
 
 class WebSocketClient:
-    def __init__(self, host="localhost", port=8000, mode=None):
+    def __init__(self, host=None, port=8000, mode=None):
+        if not host:
+            host = os.environ.get("HOST", "localhost")
         self.host = host
         self.port = port
         self.socket = None

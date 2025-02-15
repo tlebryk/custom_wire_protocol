@@ -8,7 +8,6 @@ from tkinter import messagebox
 import json
 import threading
 
-# from websocket_client import WebSocketClient  # Import the WebSocketClient class
 from client import WebSocketClient  # Import the WebSocketClient class
 import logging, logging.config
 from pathlib import Path

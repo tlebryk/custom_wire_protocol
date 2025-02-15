@@ -164,7 +164,7 @@ python client.py
 
 ```
 _Note: The server computer can also act as a client, and multiple clients can connect to the same server concurrently._
-```
 
 ## Engineering notebook: 
+
 https://docs.google.com/document/d/1JtPzRj3rhguNx7oXOzPTn3823a7jsuBHUxpW0L8DIa0/edit?usp=sharing

@@ -2,7 +2,6 @@ import socket
 import json
 from utils import perform_handshake, WebSocketUtil
 
-
 class WebSocketClient:
     def __init__(self, host="localhost", port=8000, mode=None):
         self.host = host

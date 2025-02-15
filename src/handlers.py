@@ -402,7 +402,15 @@ def handle_unread_messages(context, data):
         ]
         send_unread_messages(context.conn, formatted_unread)
     else:
-        send_error(context.conn, "Invalid username or password.")
+    # bug fix: Instead of sending "Invalid username or password.", send an empty list
+        send_success(
+            context.conn,
+            {
+                "action": "unread_messages",
+                "messages": [],
+                "message": "No unread messages.",
+            },
+        )
 
 
 def handle_delete_message(context, data):

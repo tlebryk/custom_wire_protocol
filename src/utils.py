@@ -234,7 +234,6 @@ class WebSocketUtil:
                 else:
                     payload = str(message).encode("utf-8")
             else:
-                # TODO: handle state elsewhere
                 encoder = custom_protocol.Encoder(custom_protocol.load_protocols())
                 payload = encoder.encode_message(message)
                 logging.warning(f"WRITE PAYLOAD DATA: {payload}")

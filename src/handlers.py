@@ -115,11 +115,9 @@ def send_success(conn: socket.socket, payload_dict: Dict[str, Any] = None) -> No
     :type payload_dict: Dict[str, Any]
     :return: None
     """
-    # TODO: make this less flexible
     if payload_dict is None:
         payload_dict = {}
     payload_dict["status"] = "success"
-    # payload_dict["action"] = "success"
     websocket.send_ws_frame(conn, payload_dict)
 
 

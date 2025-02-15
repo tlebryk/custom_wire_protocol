@@ -13,7 +13,6 @@ def protocols():
     """
     Fixture to load protocols.json once for all tests.
     """
-    # TODO: handle the file path better
     return load_protocols()
 
 

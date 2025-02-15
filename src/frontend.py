@@ -93,18 +93,7 @@ class ChatApp(tk.Tk):
         Sends a message via the WebSocket client.
         """
         if self.ws_client and self.ws_client.connected:
-            # if self.mode == "json":
-            #     data = json.dumps(message_dict)
-            #     data = data.encode("utf-8")
-            # else:
-            #     logging.info("here")
-            #     data = self.encoder.encode_message(message_dict)
-            #     logging.warning(f"Sending data: {data}")
             self.ws_client.send(message_dict)
-            # receive is blocking
-            # response = self.ws_client.receive()
-            # logging.warning(f"Received response: {response}")
-            # self.handle_incoming_message(response)
         else:
             messagebox.showwarning("Connection Error", "WebSocket is not connected.")
 
@@ -113,10 +102,6 @@ class ChatApp(tk.Tk):
         Handles incoming messages from the WebSocket server.
         """
         try:
-            # if self.mode == "json":
-            #     data = json.loads(message)
-            # else:
-            #     data = self.decoder.decode_message(message)
             data = message
             status = data.get("status")
             action = data.get("action")
@@ -420,11 +405,14 @@ class ChatBox(tk.Frame):
         self.user_list = []
         self.selected_user = tk.StringVar(self)
         self.selected_user.set("Select a user")  # Default placeholder
-        self.user_dropdown = tk.OptionMenu(receiver_frame, self.selected_user, "Select a user", *self.user_list)
+        self.user_dropdown = tk.OptionMenu(
+            receiver_frame, self.selected_user, "Select a user", *self.user_list
+        )
         self.user_dropdown.pack(side=tk.LEFT, padx=5)
 
-        tk.Button(receiver_frame, text="Refresh", command=self.fetch_users).pack(side=tk.LEFT, padx=5)
-
+        tk.Button(receiver_frame, text="Refresh", command=self.fetch_users).pack(
+            side=tk.LEFT, padx=5
+        )
 
         # Message Text
         message_frame = tk.Frame(self)
@@ -485,17 +473,15 @@ class ChatBox(tk.Frame):
         menu.delete(0, "end")  # Clear previous entries
 
         for user in users:
-            menu.add_command(label=user, command=lambda value=user: self.selected_user.set(value))
-
+            menu.add_command(
+                label=user, command=lambda value=user: self.selected_user.set(value)
+            )
 
     def fetch_users(self):
         """
         Sends a request to fetch all users except the logged-in user.
         """
         self.master.send_message_via_ws({"action": "get_users"})
-
-
-
 
 
 class MessagesContainer(tk.Frame):

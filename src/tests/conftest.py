@@ -9,6 +9,10 @@ import threading
 import time
 import server  # Assuming server.py is in the root directory
 import logging
+import os
+
+if not os.environ.get("PROTOCOL_FILE"):
+    os.environ["PROTOCOL_FILE"] = "./configs/protocol.json"
 
 
 @pytest.fixture(scope="session")

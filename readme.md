@@ -34,25 +34,30 @@ src/
 ## Starting the Backend Server
 To start the backend server, run:
 
-python src/server.py
+`python src/server.py`
 
 The server will be listening on 0.0.0.0:8000 for incoming connections.
 
 Launching the Frontend
 To launch the frontend chat application, run:
 
-python src/frontend.py
+`python src/frontend.py`
 
 The frontend uses Tkinter to provide a GUI for chat registration, login, and message handling. It connects to the backend server for real-time communication.
 
+## Testing 
+To test this code, run pytest from the src directory.
+
+Example command: 
+`python -m pytest tests/ -s -vv `
+
+Optionally, you can specify where your config file is by prefixing your pytest command with `PROTOCOL_FILE="./configs/protocol.json" pytest ...`, but the default location is `src/configs/protocol.json`. This is helpful if you need to run the tests from the root directory or elsewhere in the project. 
 ## Protocol Modes
 The project supports two modes for testing protocols:
 
 ### JSON Mode
 Set the environment variable to json to run using JSON.
 export MODE='json'
-Copy
-Insert
 
 ### Custom Protocol Mode
 Set the environment variable to custom to run using custom protocols implemented in the project.

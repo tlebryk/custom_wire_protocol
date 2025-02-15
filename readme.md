@@ -92,7 +92,7 @@ export MODE='custom'
 
 _If the `MODE` variable is not specified, the frontend will try to determine it from the system’s environment variables and default to JSON._
 
-Performance varies based on the message being sent, but we found a 45% reduction in size of data transfered over the wire using the custom protocol compared to json with the following simple packet: 
+Performance varies based on the message being sent, but we found a 29% reduction in size of data transfered over the wire using the custom protocol compared to json with the following simple packet: 
 ```json
 {
    "action": "login",

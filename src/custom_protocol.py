@@ -1,14 +1,10 @@
 import json
 
-# encoder.py
 import struct
-from typing import Dict, Any
 import logging
 import os
 
-# decoder.py
-import struct
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Tuple
 
 
 # undo hardcode
@@ -25,11 +21,72 @@ def load_protocols(
 
 class Encoder:
     def __init__(self, protocols: Dict[str, Any]):
+        """
+        Initialize the Encoder.
+
+        Args:
+            protocols (Dict[str, Any]): A dictionary mapping protocol names to their
+                specifications. The dictionary should have the following structure:
+
+                {
+                    "action_ids": {
+                        "<action_name_1>": <action_id_1>,
+                        "<action_name_2>": <action_id_2>,
+                        ...
+                    },
+                    "messages": {
+                        "<action_name_1>": {
+                            "action": "<action_name_1>",
+                            "fields": {
+                                "<field_name_1>": {"type": "<field_type_1>"},
+                                "<field_name_2>": {"type": "<field_type_2>"},
+                                ...
+                            }
+                        },
+                        "<action_name_2>": {
+                            "action": "<action_name_2>",
+                            "fields": {
+                                "<field_name_1>": {"type": "<field_type_1>"},
+                                "<field_name_2>": {"type": "<field_type_2>"},
+                                ...
+                            }
+                        },
+                        ...
+                    }
+                }
+
+        Note: The "action_ids" dictionary maps action names to action IDs, and the
+        "messages" dictionary maps action names to message specifications.
+        """
         self.protocols = protocols
         self.action_ids = protocols["action_ids"]
         self.messages = protocols["messages"]
 
     def encode_message(self, message_obj: Dict[str, Any]) -> bytes:
+        """
+        Encode a message object into bytes.
+
+        Args:
+            message_obj (Dict[str, Any]): A dictionary representing the message to be
+                encoded. The dictionary should have the following structure:
+
+                {
+                    "action": "<action_name>",
+                    "<field_name_1>": <field_value_1>,
+                    "<field_name_2>": <field_value_2>,
+                    ...
+                }
+
+                where "<action_name>" is the name of the action, and "<field_name_i>" and
+                "<field_value_i>" are the name and value of the i-th field, respectively.
+
+        Returns:
+            bytes: The encoded message as a sequence of bytes.
+
+        Raises:
+            ValueError: If the message object is missing a required field, or if the
+                message type is unknown.
+        """
         logging.warning(f"Encoding message: {message_obj}")
         message_type = message_obj.get("action")
         if not message_type:
@@ -69,20 +126,53 @@ class Encoder:
 
     @staticmethod
     def encode_string(value: str) -> bytes:
+        """
+        Encode a string into bytes.
+
+        Args:
+            value (str): The string to encode.
+
+        Returns:
+            bytes: The encoded string as a sequence of bytes.
+        """
         encoded_str = value.encode("utf-8")
         length = len(encoded_str)
         if length > 65535:
             raise ValueError("String too long to encode (max 65535 bytes).")
+        # 2-byte length
         return struct.pack("!H", length) + encoded_str
 
     @staticmethod
     def encode_int(value: int) -> bytes:
-        # Assuming 4-byte signed integer
+        """
+        Encode an integer into bytes.
+
+        Args:
+            value (int): The integer to encode. Must be a 4-byte signed integer.
+
+        Returns:
+            bytes: The encoded integer as a sequence of bytes.
+        """
         return struct.pack("!i", value)
 
     def encode_list(
-        self, value: List[Any], element_type: str, items_spec: Dict[str, Any] = None
+        self,
+        value: List[Any],
+        element_type: str,
+        items_spec: Optional[Dict[str, Any]] = None,
     ) -> bytes:
+        """
+        Encode a list into bytes.
+
+        Args:
+            value (List[Any]): The list to encode.
+            element_type (str): The type of each element in the list.
+            items_spec (Optional[Dict[str, Any]]): If `element_type` is 'object',
+                the specification of the fields of the object. Defaults to None.
+
+        Returns:
+            bytes: The encoded list as a sequence of bytes.
+        """
         encoded = b""
         length = len(value)
         if length > 65535:
@@ -106,6 +196,17 @@ class Encoder:
         return encoded
 
     def encode_object(self, obj: Dict[str, Any], fields_spec: Dict[str, Any]) -> bytes:
+        """
+        Encode a dictionary into bytes.
+
+        Args:
+            obj (Dict[str, Any]): The dictionary to encode.
+            fields_spec (Dict[str, Any]): A dictionary mapping field names to
+                their specifications.
+
+        Returns:
+            bytes: The encoded dictionary as a sequence of bytes.
+        """
         encoded = b""
         for field_name, field_spec in fields_spec.items():
             field_value = obj.get(field_name)
@@ -130,41 +231,80 @@ class Encoder:
         return encoded
 
 
-import struct
-from typing import Dict, Any, List
-
-# Assume load_protocols is defined as before
-
-
 class Decoder:
-    def __init__(self, protocols: Dict[str, Any]):
+    def __init__(self, protocols: Dict[str, Any]) -> None:
+        """
+        Initialize the Decoder.
+
+        Args:
+            protocols (Dict[str, Any]): A dictionary mapping protocol names to their
+                specifications. The dictionary should have the following structure:
+
+                {
+                    "action_ids": {
+                        "<action_name_1>": <action_id_1>,
+                        "<action_name_2>": <action_id_2>,
+                        ...
+                    },
+                    "messages": {
+                        "<action_name_1>": {
+                            "action": "<action_name_1>",
+                            "fields": {
+                                "<field_name_1>": {"type": "<field_type_1>"},
+                                "<field_name_2>": {"type": "<field_type_2>"},
+                                ...
+                            }
+                        },
+                        "<action_name_2>": {
+                            "action": "<action_name_2>",
+                            "fields": {
+                                "<field_name_1>": {"type": "<field_type_1>"},
+                                "<field_name_2>": {"type": "<field_type_2>"},
+                                ...
+                            }
+                        },
+                        ...
+                    }
+                }
+
+        Note: The "action_ids" dictionary maps action names to action IDs, and the
+        "messages" dictionary maps action names to message specifications.
+        """
         self.protocols = protocols
         self.action_ids = protocols["action_ids"]
         self.messages = protocols["messages"]
         # Create reverse mapping from action_id to action_type
-        self.id_to_action = {v: k for k, v in self.action_ids.items()}
+        self.id_to_action: Dict[int, str] = {v: k for k, v in self.action_ids.items()}
 
     def decode_message(self, data: bytes) -> Dict[str, Any]:
+        """
+        Decode a message from a sequence of bytes.
+
+        Args:
+            data (bytes): The sequence of bytes to decode.
+
+        Returns:
+            Dict[str, Any]: The decoded message as a dictionary.
+        """
         offset = 0
         if len(data) < 1:
             raise ValueError("Data too short to contain action ID.")
-        print(f"Data: {data}")
         # Unpack action ID (1 byte)
-        action_id = struct.unpack_from("!B", data, offset)[0]
+        action_id: int = struct.unpack_from("!B", data, offset)[0]
         offset += 1
 
-        action_type = self.id_to_action.get(action_id)
+        action_type: str = self.id_to_action.get(action_id)
         if not action_type:
             raise ValueError(f"Unknown action ID: {action_id}")
 
-        message_schema = self.messages.get(action_type)
+        message_schema: Dict[str, Any] = self.messages.get(action_type)
         if not message_schema:
             raise ValueError(f"No schema defined for action type: {action_type}")
 
-        message_obj = {"action": action_type}
+        message_obj: Dict[str, Any] = {"action": action_type}
 
         for field_name, field_spec in message_schema["fields"].items():
-            field_type = field_spec["type"]
+            field_type: str = field_spec["type"]
             if field_type == "string":
                 field_value, bytes_consumed = self.decode_string(data, offset)
                 message_obj[field_name] = field_value
@@ -193,6 +333,17 @@ class Decoder:
 
     @staticmethod
     def decode_string(data: bytes, offset: int) -> (str, int):
+        """
+        Decode a string from the given binary data, starting from the given offset.
+
+        Args:
+            data (bytes): The binary data containing the string.
+            offset (int): The starting offset of the string in the binary data.
+
+        Returns:
+            tuple: A tuple containing the decoded string and the number of bytes consumed.
+        """
+
         if len(data) < offset + 2:
             raise ValueError("Data too short to contain string length.")
 
@@ -209,7 +360,17 @@ class Decoder:
         return string_value, 2 + length
 
     @staticmethod
-    def decode_int(data: bytes, offset: int) -> (int, int):
+    def decode_int(data: bytes, offset: int) -> Tuple[int, int]:
+        """
+        Decode a 4-byte signed integer from the given binary data, starting from the given offset.
+
+        Args:
+            data (bytes): The binary data containing the integer.
+            offset (int): The starting offset of the integer in the binary data.
+
+        Returns:
+            tuple: A tuple containing the decoded integer and the number of bytes consumed.
+        """
         if len(data) < offset + 4:
             raise ValueError("Data too short to contain an integer.")
         int_value = struct.unpack_from("!i", data, offset)[0]
@@ -220,8 +381,21 @@ class Decoder:
         data: bytes,
         offset: int,
         element_type: str,
-        items_spec: Dict[str, Any] = None,
-    ) -> (List[Any], int):
+        items_spec: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[List[Any], int]:
+        """
+        Decode a list from the given binary data, starting from the given offset.
+
+        Args:
+            data (bytes): The binary data containing the list.
+            offset (int): The starting offset of the list in the binary data.
+            element_type (str): The type of each element in the list.
+            items_spec (Optional[Dict[str, Any]]): If `element_type` is 'object',
+                the specification of the fields of the object. Defaults to None.
+
+        Returns:
+            tuple: A tuple containing the decoded list and the number of bytes consumed.
+        """
         if len(data) < offset + 2:
             raise ValueError("Data too short to contain list length.")
         length = struct.unpack_from("!H", data, offset)[0]
@@ -250,7 +424,18 @@ class Decoder:
 
     def decode_object(
         self, data: bytes, offset: int, fields_spec: Dict[str, Any]
-    ) -> (Dict[str, Any], int):
+    ) -> Tuple[Dict[str, Any], int]:
+        """
+        Decode an object from the given binary data, starting from the given offset.
+
+        Args:
+            data (bytes): The binary data containing the object.
+            offset (int): The starting offset of the object in the binary data.
+            fields_spec (Dict[str, Any]): The specification of the fields of the object.
+
+        Returns:
+            tuple: A tuple containing the decoded object and the number of bytes consumed.
+        """
         obj = {}
         total_consumed = 0
         for field_name, field_spec in fields_spec.items():

@@ -5,6 +5,7 @@ This repository contains the backend components for the App project. It provides
 ## Prerequisites
 
 - [Python 3.10](https://www.python.org/downloads/) or higher
+- No additional libraries beyond standard libraries. 
 
 ## Installation
 

@@ -17,9 +17,7 @@ import custom_protocol
 import os
 from typing import Dict, Any, Optional, Union, List, Callable, Literal
 
-# format logs to include filename and line number
 
-# Set up logging
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
     level=logging.INFO,

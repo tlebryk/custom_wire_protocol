@@ -1,41 +1,128 @@
 # server.py
-import socket
-import threading
-from handlers import handle_client_connection
+from concurrent import futures
+import grpc
 import logging
-import sys
 
-# Configure the root logger
-logging.basicConfig(
-    level=logging.INFO,  # Set the desired logging level
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],  # Log to stdout
-)
+import protocols_pb2
+import protocols_pb2_grpc
 
-# change host to your server's IP address in run server on multiple machines
-HOST = "0.0.0.0"
-PORT = 8000
+logging.basicConfig(level=logging.INFO)
 
 
-def main():
-    """
-    Main server function:
-      1. Creates a TCP socket on HOST:PORT.
-      2. Accepts connections in a loop.
-      3. Spawns a new thread to handle each connected client.
-    """
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((HOST, PORT))
-        s.listen()
-        print(f"[*] WebSocket server listening on {HOST}:{PORT}")
+class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
+    def Login(self, request, context):
+        logging.info("Login called for user: %s", request.username)
+        # Replace with your actual login logic
+        return protocols_pb2.ConfirmLoginResponse(
+            username=request.username,
+            message="Logged in successfully",
+            status="success",
+        )
 
-        while True:
-            conn, addr = s.accept()
-            threading.Thread(
-                target=handle_client_connection, args=(conn, addr), daemon=True
-            ).start()
+    def Register(self, request, context):
+        logging.info("Register called for user: %s", request.username)
+        # Replace with your actual registration logic
+        return protocols_pb2.SuccessResponse(
+            message="Registration successful", status="success"
+        )
+
+    def SendMessage(self, request, context):
+        logging.info(
+            "SendMessage called. Message: %s, Receiver: %s",
+            request.message,
+            request.receiver,
+        )
+        # Replace with your send message logic
+        return protocols_pb2.ConfirmSendMessageResponse(
+            **dict(
+                message="Message sent",
+                status="success",
+                timestamp="2025-02-23T00:00:00Z",
+                # /from="server"
+            )
+        )
+
+    def Echo(self, request, context):
+        logging.info("Echo called with message: %s", request.message)
+        # Simply echo back the received message
+        return protocols_pb2.ConfirmEchoResponse(
+            message=request.message, status="success"
+        )
+
+    def GetRecentMessages(self, request, context):
+        logging.info("GetRecentMessages called for user: %s", request.username)
+        # Replace with your logic to fetch recent messages.
+        # Here we provide a dummy message for demonstration.
+        dummy_message = protocols_pb2.ChatMessage(
+            message="Hello, this is a recent message",
+            timestamp="2025-02-23T00:00:00Z",
+            # from="user1",
+            id=1,
+        )
+        return protocols_pb2.RecentMessagesResponse(
+            messages=[dummy_message], status="success"
+        )
+
+    def GetUnreadMessages(self, request, context):
+        logging.info("GetUnreadMessages called for user: %s", request.username)
+        # Replace with your logic to fetch unread messages.
+        dummy_message = protocols_pb2.ChatMessage(
+            message="This is an unread message",
+            timestamp="2025-02-23T00:00:00Z",
+            # from="user2",
+            id=2,
+        )
+        return protocols_pb2.UnreadMessagesResponse(
+            messages=[dummy_message], status="success"
+        )
+
+    def SetNUnreadMessages(self, request, context):
+        logging.info(
+            "SetNUnreadMessages called for user: %s, n_unread_messages: %d",
+            request.username,
+            request.n_unread_messages,
+        )
+        # Replace with your logic to set the unread messages count.
+        return protocols_pb2.SuccessResponse(
+            message="Unread message count set", status="success"
+        )
+
+    def MarkAsRead(self, request, context):
+        logging.info("MarkAsRead called for message_ids: %s", request.message_ids)
+        # Replace with your logic to mark messages as read.
+        return protocols_pb2.ConfirmMarkAsReadResponse(
+            message="Messages marked as read", status="success"
+        )
+
+    def DeleteMessage(self, request, context):
+        logging.info(
+            "DeleteMessage called for user: %s, message_id: %d",
+            request.username,
+            request.message_id,
+        )
+        # Replace with your delete message logic.
+        return protocols_pb2.SuccessResponse(
+            message="Message deleted", status="success"
+        )
+
+    def DeleteAccount(self, request, context):
+        logging.info("DeleteAccount called for user: %s", request.username)
+        # Replace with your delete account logic.
+        return protocols_pb2.SuccessResponse(
+            message="Account deleted", status="success"
+        )
+
+
+def serve():
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    protocols_pb2_grpc.add_MessagingServiceServicer_to_server(
+        MessagingServiceServicer(), server
+    )
+    server.add_insecure_port("[::]:50051")
+    logging.info("Starting gRPC server on port 50051...")
+    server.start()
+    server.wait_for_termination()
 
 
 if __name__ == "__main__":
-    main()
+    serve()

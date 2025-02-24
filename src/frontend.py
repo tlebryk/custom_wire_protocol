@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import messagebox
 import threading
-from grpc_client import GRPCClient
+from client import GRPCClient
 
 
 class ChatApp(tk.Tk):
@@ -12,9 +12,8 @@ class ChatApp(tk.Tk):
         self.geometry("400x300")
 
         # Initialize the gRPC client.
-        self.grpc_client = GRPCClient()
-
         # Create a simple login form.
+
         self.username_entry = tk.Entry(self)
         self.username_entry.pack(pady=10)
         self.username_entry.insert(0, "Username")
@@ -32,6 +31,7 @@ class ChatApp(tk.Tk):
 
         self.response_label = tk.Label(self, text="Response:")
         self.response_label.pack(pady=10)
+        self.grpc_client = GRPCClient()
 
     def login(self):
         username = self.username_entry.get().strip()

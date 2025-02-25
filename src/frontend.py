@@ -10,6 +10,7 @@ import os
 # Import the generated gRPC modules
 import protocols_pb2
 import protocols_pb2_grpc
+from typing import Dict, Any, Optional, List, Union, Literal
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
@@ -143,7 +144,7 @@ class ChatApp(tk.Tk):
         username = self.n_new_messages.username
         if username:
             response = self.grpc_client.get_unread_messages(username)
-            if response:
+            if response and response.status == "success":
                 for msg in response.messages:
                     msg_dict = {
                         "timestamp": msg.timestamp,
@@ -158,7 +159,7 @@ class ChatApp(tk.Tk):
         username = self.n_new_messages.username
         if username:
             response = self.grpc_client.get_recent_messages(username)
-            if response:
+            if response and response.status == "success":
                 for msg in response.messages:
                     msg_dict = {
                         "timestamp": msg.timestamp,
@@ -304,9 +305,10 @@ class LoginForm(tk.Frame):
             self.master.get_unread_messages()
             self.master.get_recent_messages()
         else:
-            error_msg = response.message if response else "An error occurred during login."
+            error_msg = (
+                response.message if response else "An error occurred during login."
+            )
             messagebox.showerror("Login Failed", error_msg)
-
 
         # Clear the input fields
         self.username_entry.delete(0, tk.END)
@@ -377,33 +379,232 @@ class ChatBox(tk.Frame):
 class MessagesContainer(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
-        self.recent_label = tk.Label(
-            self, text="Recent Messages", font=("Helvetica", 14)
-        )
-        self.recent_label.pack(pady=5)
-        self.recent_text = tk.Text(self, height=10, width=80)
-        self.recent_text.pack(pady=5)
+        self.username = None
 
-        self.unread_label = tk.Label(
-            self, text="Unread Messages", font=("Helvetica", 14)
-        )
-        self.unread_label.pack(pady=5)
-        self.unread_text = tk.Text(self, height=10, width=80)
-        self.unread_text.pack(pady=5)
+        # Dictionaries to store messages with their IDs
+        self.unread_messages_dict = {}
+        self.recent_messages_dict = {}
 
-    def add_recent_message(self, msg):
-        display_text = (
-            f"{msg.get('timestamp')} - {msg.get('from')}: {msg.get('message')}\n"
-        )
-        self.recent_text.insert(tk.END, display_text)
-        self.recent_text.see(tk.END)
+        # Create scrollable sections for Unread and Recent Messages
+        self.create_scrollable_sections()
 
-    def add_unread_message(self, msg):
-        display_text = (
-            f"{msg.get('timestamp')} - {msg.get('from')}: {msg.get('message')}\n"
+    def create_scrollable_sections(self):
+        # Unread Messages Section
+        self.configure(width=600)
+        unread_section = tk.LabelFrame(
+            self, text="Unread Messages", padx=5, pady=5, width=600
         )
-        self.unread_text.insert(tk.END, display_text)
-        self.unread_text.see(tk.END)
+        unread_section.pack(side=tk.TOP, padx=5, pady=5, fill=tk.BOTH, expand=True)
+
+        unread_canvas = tk.Canvas(unread_section, borderwidth=0, width=580)
+        unread_scrollbar = tk.Scrollbar(
+            unread_section, orient="vertical", command=unread_canvas.yview
+        )
+        self.unread_messages_frame = tk.Frame(unread_canvas)
+
+        self.unread_messages_frame.bind(
+            "<Configure>",
+            lambda e: unread_canvas.configure(scrollregion=unread_canvas.bbox("all")),
+        )
+
+        unread_canvas.create_window(
+            (0, 0), window=self.unread_messages_frame, anchor="nw"
+        )
+        unread_canvas.configure(yscrollcommand=unread_scrollbar.set)
+
+        unread_canvas.pack(side="left", fill="both", expand=True)
+        unread_scrollbar.pack(side="right", fill="y")
+
+        # Recent Messages Section
+        recent_section = tk.LabelFrame(
+            self, text="Recent Messages", padx=5, pady=5, width=600
+        )
+        recent_section.pack(side=tk.TOP, padx=5, pady=5, fill=tk.BOTH, expand=True)
+
+        recent_canvas = tk.Canvas(recent_section, borderwidth=0, width=580)
+        recent_scrollbar = tk.Scrollbar(
+            recent_section, orient="vertical", command=recent_canvas.yview
+        )
+        self.recent_messages_frame = tk.Frame(recent_canvas)
+
+        self.recent_messages_frame.bind(
+            "<Configure>",
+            lambda e: recent_canvas.configure(scrollregion=recent_canvas.bbox("all")),
+        )
+
+        recent_canvas.create_window(
+            (0, 0), window=self.recent_messages_frame, anchor="nw"
+        )
+        recent_canvas.configure(yscrollcommand=recent_scrollbar.set)
+
+        recent_canvas.pack(side="left", fill="both", expand=True)
+        recent_scrollbar.pack(side="right", fill="y")
+
+    def mark_all_as_read(self) -> None:
+        if not self.unread_messages_dict:
+            messagebox.showinfo(
+                "No Unread Messages", "There are no unread messages to mark as read."
+            )
+            return
+
+        # Prepare message IDs
+        message_ids: List[int] = list(self.unread_messages_dict.keys())
+        response = self.master.grpc_client.mark_as_read(message_ids)
+        if response:
+            # Move each unread message to recent messages
+            for msg_id, frame in list(self.unread_messages_dict.items()):
+                # Extract text from the label (assuming first child holds the message text)
+                msg_text = frame.winfo_children()[0].cget("text")
+                # For simplicity, we re-use the same text for recent messages.
+                message_data = {
+                    "id": msg_id,
+                    "from": msg_text.split(" ")[1] if " " in msg_text else "",
+                    "timestamp": (
+                        msg_text.split(" at ")[1].split(":")[0]
+                        if " at " in msg_text
+                        else ""
+                    ),
+                    "message": (
+                        ": ".join(msg_text.split(": ")[1:])
+                        if ": " in msg_text
+                        else msg_text
+                    ),
+                }
+                self.add_recent_message(message_data)
+                frame.destroy()
+                del self.unread_messages_dict[msg_id]
+            messagebox.showinfo(
+                "Messages Read", "All unread messages have been marked as read."
+            )
+        else:
+            messagebox.showerror("Error", "Failed to mark messages as read.")
+
+    def add_unread_message(self, message_data: Dict[str, Any]) -> None:
+        msg_id = message_data.get("id")
+        sender = message_data.get("from")
+        timestamp = message_data.get("timestamp")
+        message = message_data.get("message")
+        if not msg_id:
+            logging.error("Message data missing 'id'.")
+            return
+
+        # Format timestamp (assuming ISO format with microseconds and timezone)
+        try:
+            timestamp_obj = datetime.datetime.strptime(
+                timestamp, "%Y-%m-%dT%H:%M:%S.%f%z"
+            )
+            timestamp_str = timestamp_obj.strftime("%Y-%m-%d %H:%M")
+        except Exception as e:
+            logging.error("Timestamp parsing failed: %s", e)
+            timestamp_str = timestamp
+
+        # Avoid duplicate messages
+        if msg_id in self.unread_messages_dict:
+            logging.info(f"Message {msg_id} already exists in unread messages.")
+            return
+
+        msg_frame = tk.Frame(
+            self.unread_messages_frame, bd=1, relief=tk.RIDGE, padx=5, pady=5
+        )
+        msg_frame.pack(fill=tk.X, pady=2)
+
+        msg_label = tk.Label(
+            msg_frame,
+            text=f"From {sender} at {timestamp_str}: {message}",
+            anchor="w",
+            justify="left",
+            wraplength=300,
+        )
+        msg_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Button to mark as read
+        read_button = tk.Button(
+            msg_frame,
+            text="Read",
+            fg="green",
+            command=lambda mid=msg_id, mf=msg_frame: self.read_message(mid, mf),
+        )
+        read_button.pack(side=tk.RIGHT, padx=5)
+
+        # Button to delete message
+        delete_button = tk.Button(
+            msg_frame,
+            text="Delete",
+            fg="red",
+            command=lambda mid=msg_id, mf=msg_frame: self.delete_message(
+                mid, mf, "unread"
+            ),
+        )
+        delete_button.pack(side=tk.RIGHT, padx=5)
+
+        self.unread_messages_dict[msg_id] = msg_frame
+
+    def read_message(self, msg_id: int, frame: tk.Frame) -> None:
+        response = self.master.grpc_client.mark_as_read([msg_id])
+        if response:
+            frame.destroy()
+            del self.unread_messages_dict[msg_id]
+            # Optionally, add to recent messages if desired.
+        else:
+            messagebox.showerror("Error", "Failed to mark message as read.")
+
+    def add_recent_message(self, message_data: Dict[str, Any]) -> None:
+        msg_id = message_data.get("id")
+        sender = message_data.get("from")
+        timestamp = message_data.get("timestamp")
+        message = message_data.get("message")
+        if not msg_id:
+            logging.error("Message data missing 'id'.")
+            return
+
+        msg_frame = tk.Frame(
+            self.recent_messages_frame, bd=1, relief=tk.RIDGE, padx=5, pady=5
+        )
+        msg_frame.pack(fill=tk.X, pady=2)
+
+        msg_label = tk.Label(
+            msg_frame,
+            text=f"From {sender} at {timestamp}: {message}",
+            anchor="w",
+            justify="left",
+            wraplength=300,
+        )
+        msg_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        delete_button = tk.Button(
+            msg_frame,
+            text="Delete",
+            fg="red",
+            command=lambda mid=msg_id, mf=msg_frame: self.delete_message(
+                mid, mf, "recent"
+            ),
+        )
+        delete_button.pack(side=tk.RIGHT, padx=5)
+
+        self.recent_messages_dict[msg_id] = msg_frame
+
+    def delete_message(
+        self, msg_id: int, frame: tk.Frame, section: Literal["unread", "recent"]
+    ) -> None:
+        confirm = messagebox.askyesno(
+            "Delete Message", "Are you sure you want to delete this message?"
+        )
+        if not confirm:
+            return
+
+        frame.destroy()
+        if section == "unread" and msg_id in self.unread_messages_dict:
+            del self.unread_messages_dict[msg_id]
+        elif section == "recent" and msg_id in self.recent_messages_dict:
+            del self.recent_messages_dict[msg_id]
+
+        response = self.master.grpc_client.delete_message(
+            self.master.n_new_messages.username, msg_id
+        )
+        if response:
+            messagebox.showinfo("Delete Message", response.message)
+        else:
+            messagebox.showerror("Delete Message", "Failed to delete message.")
 
 
 class DeleteAccountContainer(tk.Frame):
@@ -424,7 +625,7 @@ class DeleteAccountContainer(tk.Frame):
             "Confirm", "Are you sure you want to delete your account?"
         ):
             response = self.master.grpc_client.delete_account(self.username)
-            if response:
+            if response and response.status == "success":
                 messagebox.showinfo("Delete Account", response.message)
             else:
                 messagebox.showerror("Delete Account", "Failed to delete account.")

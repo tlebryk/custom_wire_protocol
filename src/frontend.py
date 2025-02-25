@@ -46,27 +46,74 @@ class GRPCClient:
             logging.error("Register RPC failed: %s", e)
             return None
 
-    # Stubs for other calls (to be implemented later)
     def send_message(self, message: str, receiver: str):
-        pass
+        try:
+            request = protocols_pb2.SendMessageRequest(
+                message=message, receiver=receiver
+            )
+            response = self.stub.SendMessage(request)
+            return response
+        except grpc.RpcError as e:
+            logging.error("SendMessage RPC failed: %s", e)
+            return None
 
     def get_recent_messages(self, username: str):
-        pass
+        try:
+            request = protocols_pb2.GetRecentMessagesRequest(username=username)
+            response = self.stub.GetRecentMessages(request)
+            return response
+        except grpc.RpcError as e:
+            logging.error("GetRecentMessages RPC failed: %s", e)
+            return None
 
     def get_unread_messages(self, username: str):
-        pass
+        try:
+            request = protocols_pb2.GetUnreadMessagesRequest(username=username)
+            response = self.stub.GetUnreadMessages(request)
+            return response
+        except grpc.RpcError as e:
+            logging.error("GetUnreadMessages RPC failed: %s", e)
+            return None
 
     def mark_as_read(self, message_ids: list):
-        pass
+        try:
+            request = protocols_pb2.MarkAsReadRequest(message_ids=message_ids)
+            response = self.stub.MarkAsRead(request)
+            return response
+        except grpc.RpcError as e:
+            logging.error("MarkAsRead RPC failed: %s", e)
+            return None
 
     def set_n_unread_messages(self, username: str, n: int):
-        pass
+        try:
+            request = protocols_pb2.SetNUnreadMessagesRequest(
+                username=username, n_unread_messages=n
+            )
+            response = self.stub.SetNUnreadMessages(request)
+            return response
+        except grpc.RpcError as e:
+            logging.error("SetNUnreadMessages RPC failed: %s", e)
+            return None
 
     def delete_message(self, username: str, message_id: int):
-        pass
+        try:
+            request = protocols_pb2.DeleteMessageRequest(
+                username=username, message_id=message_id
+            )
+            response = self.stub.DeleteMessage(request)
+            return response
+        except grpc.RpcError as e:
+            logging.error("DeleteMessage RPC failed: %s", e)
+            return None
 
     def delete_account(self, username: str):
-        pass
+        try:
+            request = protocols_pb2.DeleteAccountRequest(username=username)
+            response = self.stub.DeleteAccount(request)
+            return response
+        except grpc.RpcError as e:
+            logging.error("DeleteAccount RPC failed: %s", e)
+            return None
 
 
 class ChatApp(tk.Tk):
@@ -83,7 +130,7 @@ class ChatApp(tk.Tk):
         self.auth_box = AuthBox(self)
         self.auth_box.pack(pady=20)
 
-        # Initialize Chat Screen Components (stubs)
+        # Initialize Chat Screen Components
         self.n_new_messages = NNewMessages(self)
         self.chat_box = ChatBox(self)
         self.messages_container = MessagesContainer(self)
@@ -91,16 +138,35 @@ class ChatApp(tk.Tk):
 
         self.mode = mode if mode else os.environ.get("MODE", "grpc")
 
-        # For gRPC, calls are synchronous so we don't need a continuous listening thread
-        # Additional functionality can be added later.
-
     def get_unread_messages(self):
-        # Stub: implement retrieval of unread messages via gRPC later
-        pass
+        # Retrieve unread messages via gRPC and update the MessagesContainer
+        username = self.n_new_messages.username
+        if username:
+            response = self.grpc_client.get_unread_messages(username)
+            if response:
+                for msg in response.messages:
+                    msg_dict = {
+                        "timestamp": msg.timestamp,
+                        "from": getattr(msg, "from"),
+                        "message": msg.message,
+                        "id": msg.id,
+                    }
+                    self.messages_container.add_unread_message(msg_dict)
 
     def get_recent_messages(self):
-        # Stub: implement retrieval of recent messages via gRPC later
-        pass
+        # Retrieve recent messages via gRPC and update the MessagesContainer
+        username = self.n_new_messages.username
+        if username:
+            response = self.grpc_client.get_recent_messages(username)
+            if response:
+                for msg in response.messages:
+                    msg_dict = {
+                        "timestamp": msg.timestamp,
+                        "from": getattr(msg, "from"),
+                        "message": msg.message,
+                        "id": msg.id,
+                    }
+                    self.messages_container.add_recent_message(msg_dict)
 
     def switch_to_chat_screen(self):
         """
@@ -281,7 +347,7 @@ class ChatBox(tk.Frame):
         if receiver == "Select Receiver":
             messagebox.showwarning("Input Error", "Please select a receiver.")
             return
-        # Call the gRPC client's send_message method (stubbed for now)
+        # Call the gRPC client's send_message method
         response = self.master.grpc_client.send_message(message, receiver)
         if response is None:
             # Assume success for the placeholder implementation
@@ -357,8 +423,11 @@ class DeleteAccountContainer(tk.Frame):
         if messagebox.askyesno(
             "Confirm", "Are you sure you want to delete your account?"
         ):
-            # Replace this stub with the actual gRPC call to delete the account.
-            messagebox.showinfo("Delete Account", "Account deletion requested (stub).")
+            response = self.master.grpc_client.delete_account(self.username)
+            if response:
+                messagebox.showinfo("Delete Account", response.message)
+            else:
+                messagebox.showerror("Delete Account", "Failed to delete account.")
 
 
 class NNewMessages(tk.Frame):

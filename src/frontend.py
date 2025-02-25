@@ -6,6 +6,7 @@ import logging
 import grpc
 import threading
 import os
+import datetime
 
 # Import the generated gRPC modules
 import protocols_pb2
@@ -262,7 +263,6 @@ class RegisterForm(tk.Frame):
         self.password_entry.delete(0, tk.END)
 
 
-
 class LoginForm(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
@@ -318,62 +318,97 @@ class LoginForm(tk.Frame):
 class ChatBox(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
-        self.username = None  # To be set upon login
+        self.username = None
 
-        tk.Label(self, text="Chat", font=("Helvetica", 16)).pack(pady=5)
+        # Receiver Username Frame
+        receiver_frame = tk.Frame(self)
+        receiver_frame.pack(pady=5)
+        tk.Label(receiver_frame, text="Receiver Username:").pack(side=tk.LEFT, padx=5)
 
-        # Receiver selection using OptionMenu
-        self.receiver_var = tk.StringVar(self)
-        self.receiver_var.set("Select Receiver")
-        self.receiver_menu = tk.OptionMenu(self, self.receiver_var, "Select Receiver")
-        self.receiver_menu.pack(pady=5)
-
-        # Frame for message entry and send button
-        self.message_frame = tk.Frame(self)
-        self.message_frame.pack(pady=10)
-
-        self.message_entry = tk.Entry(self.message_frame, width=50)
-        self.message_entry.pack(side=tk.LEFT, padx=5)
-
-        self.send_button = tk.Button(
-            self.message_frame, text="Send", command=self.send_message
+        self.user_list = []  # List of available users
+        self.selected_user = tk.StringVar(self)
+        self.selected_user.set("Select a user")  # Default placeholder
+        self.user_dropdown = tk.OptionMenu(
+            receiver_frame, self.selected_user, "Select a user", *self.user_list
         )
-        self.send_button.pack(side=tk.LEFT, padx=5)
+        self.user_dropdown.pack(side=tk.LEFT, padx=5)
+
+        # Refresh button to fetch users
+        tk.Button(receiver_frame, text="Refresh", command=self.fetch_users).pack(
+            side=tk.LEFT, padx=5
+        )
+
+        # Message Text Frame
+        message_frame = tk.Frame(self)
+        message_frame.pack(pady=5)
+        tk.Label(message_frame, text="Message:").pack(side=tk.LEFT, padx=5)
+        self.message_text = tk.Entry(message_frame, width=50)
+        self.message_text.pack(side=tk.LEFT, padx=5)
+
+        # Send Button
+        send_button = tk.Button(self, text="Send", command=self.send_message)
+        send_button.pack(pady=5)
+
+        # Error Message Box
+        self.error_box = tk.Label(self, text="", fg="red")
+        self.error_box.pack(pady=5)
+        self.error_box.pack_forget()  # Initially hidden
 
     def send_message(self):
-        message = self.message_entry.get().strip()
-        receiver = self.receiver_var.get()
+        receiver = self.selected_user.get()
+        message = self.message_text.get().strip()
+        if not receiver or receiver == "Select a user":
+            self.display_error("Receiver cannot be empty.")
+            return
         if not message:
-            messagebox.showwarning("Input Error", "Please enter a message.")
+            self.display_error("Message cannot be empty.")
             return
-        if receiver == "Select Receiver":
-            messagebox.showwarning("Input Error", "Please select a receiver.")
-            return
+
+        # Clear any previous error
+        self.error_box.pack_forget()
+
         # Call the gRPC client's send_message method
         response = self.master.grpc_client.send_message(message, receiver)
         if response is None:
-            # Assume success for the placeholder implementation
+            # Assume success if no error response is returned.
             logging.info(f"Sent message to {receiver}: {message}")
             messagebox.showinfo("Message Sent", f"Message sent to {receiver}.")
         else:
             logging.info(f"Response from send_message: {response}")
-        # Clear the message entry
-        self.message_entry.delete(0, tk.END)
+        # Clear the message input field.
+        self.message_text.delete(0, tk.END)
+
+    def display_error(self, message):
+        self.error_box.config(text=message)
+        self.error_box.pack()
+
+    def update_user_list(self, users):
+        """
+        Updates the dropdown with the latest list of users.
+        """
+        if not users:
+            self.selected_user.set("No users available")
+            return
+
+        self.user_list = users
+        self.selected_user.set(users[0])  # Set the first user as default
+
+        menu = self.user_dropdown["menu"]
+        menu.delete(0, "end")  # Clear previous entries
+
+        for user in users:
+            menu.add_command(
+                label=user, command=lambda value=user: self.selected_user.set(value)
+            )
 
     def fetch_users(self):
         """
-        Populate the receiver dropdown with a dummy list of users.
-        This method can later be updated to call a gRPC method to fetch real user data.
+        Simulates a request to fetch all users except the logged-in user.
+        In a real implementation, this would call a gRPC method.
         """
-        dummy_users = ["user1", "user2", "user3"]
-        menu = self.receiver_menu["menu"]
-        menu.delete(0, "end")
-        for user in dummy_users:
-            menu.add_command(
-                label=user, command=lambda value=user: self.receiver_var.set(value)
-            )
-        if dummy_users:
-            self.receiver_var.set(dummy_users[0])
+        # For now, we use dummy data.
+        dummy_users = ["a", "aaa", "ab"]
+        self.update_user_list(dummy_users)
 
 
 class MessagesContainer(tk.Frame):

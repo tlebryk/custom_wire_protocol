@@ -2,22 +2,13 @@
 from concurrent import futures
 import grpc
 import logging
-<<<<<<< HEAD
 import threading
 import time
 from datetime import datetime
 
-from users import authenticate_user, register_user, delete_account
-from database import (
-    insert_message,
-    get_recent_messages,
-    get_undelivered_messages,
-    delete_message,
-)
-=======
+
 from users import authenticate_user, register_user, delete_account
 from database import delete_message
->>>>>>> origin/rpc-init
 
 import protocols_pb2
 import protocols_pb2_grpc
@@ -258,7 +249,6 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             return protocols_pb2.SuccessResponse(
                 message="Failed to delete message", status="error"
             )
-    
 
     def DeleteAccount(self, request, context):
         """
@@ -275,8 +265,6 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             return protocols_pb2.SuccessResponse(
                 message="Failed to delete account", status="error"
             )
-        
-
 
 
 def serve():

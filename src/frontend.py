@@ -294,19 +294,20 @@ class LoginForm(tk.Frame):
 
         # Call the gRPC login method
         response = self.master.grpc_client.login(username, password)
-        if response:
+        if response and response.status == "success":
             messagebox.showinfo("Login Successful", response.message)
-            # Set username in chat components
+            # Set username and switch to chat screen
             self.master.n_new_messages.username = response.username
             self.master.chat_box.username = response.username
             self.master.messages_container.username = response.username
             self.master.delete_account_container.username = response.username
             self.master.switch_to_chat_screen()
-            # Optionally, retrieve messages after login
             self.master.get_unread_messages()
             self.master.get_recent_messages()
         else:
-            messagebox.showerror("Login Failed", "An error occurred during login.")
+            error_msg = response.message if response else "An error occurred during login."
+            messagebox.showerror("Login Failed", error_msg)
+
 
         # Clear the input fields
         self.username_entry.delete(0, tk.END)

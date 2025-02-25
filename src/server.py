@@ -2,6 +2,7 @@
 from concurrent import futures
 import grpc
 import logging
+from users import authenticate_user, register_user
 
 import protocols_pb2
 import protocols_pb2_grpc
@@ -10,21 +11,36 @@ logging.basicConfig(level=logging.INFO)
 
 
 class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
+    # message is always sending success, fix this
     def Login(self, request, context):
         logging.info("Login called for user: %s", request.username)
-        # Replace with your actual login logic
-        return protocols_pb2.ConfirmLoginResponse(
-            username=request.username,
-            message="Logged in successfully",
-            status="success",
-        )
+        if authenticate_user(request.username, request.password):
+            return protocols_pb2.ConfirmLoginResponse(
+                username=request.username,
+                message="Logged in successfully",
+                status="success",
+            )
+        else:
+            return protocols_pb2.ConfirmLoginResponse(
+                username=request.username,
+                message="Invalid username or password",
+                status="error",
+            )
 
     def Register(self, request, context):
         logging.info("Register called for user: %s", request.username)
-        # Replace with your actual registration logic
-        return protocols_pb2.SuccessResponse(
-            message="Registration successful", status="success"
-        )
+        success, msg = register_user(request.username, request.password)
+        if success:
+            return protocols_pb2.SuccessResponse(
+                message=msg,
+                status="success",
+            )
+        else:
+            return protocols_pb2.SuccessResponse(
+                message=msg,
+                status="error",
+            )
+
 
     def SendMessage(self, request, context):
         logging.info(

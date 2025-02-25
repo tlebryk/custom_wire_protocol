@@ -143,7 +143,7 @@ class ChatApp(tk.Tk):
         username = self.n_new_messages.username
         if username:
             response = self.grpc_client.get_unread_messages(username)
-            if response:
+            if response and response.status == "success":
                 for msg in response.messages:
                     msg_dict = {
                         "timestamp": msg.timestamp,
@@ -158,7 +158,7 @@ class ChatApp(tk.Tk):
         username = self.n_new_messages.username
         if username:
             response = self.grpc_client.get_recent_messages(username)
-            if response:
+            if response and response.status == "success":
                 for msg in response.messages:
                     msg_dict = {
                         "timestamp": msg.timestamp,
@@ -305,9 +305,10 @@ class LoginForm(tk.Frame):
             self.master.get_unread_messages()
             self.master.get_recent_messages()
         else:
-            error_msg = response.message if response else "An error occurred during login."
+            error_msg = (
+                response.message if response else "An error occurred during login."
+            )
             messagebox.showerror("Login Failed", error_msg)
-
 
         # Clear the input fields
         self.username_entry.delete(0, tk.END)
@@ -425,7 +426,7 @@ class DeleteAccountContainer(tk.Frame):
             "Confirm", "Are you sure you want to delete your account?"
         ):
             response = self.master.grpc_client.delete_account(self.username)
-            if response:
+            if response and response.status == "success":
                 messagebox.showinfo("Delete Account", response.message)
             else:
                 messagebox.showerror("Delete Account", "Failed to delete account.")

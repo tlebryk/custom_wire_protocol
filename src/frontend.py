@@ -251,16 +251,15 @@ class RegisterForm(tk.Frame):
 
         # Call the gRPC register method
         response = self.master.grpc_client.register(username, password)
-        if response:
-            messagebox.showinfo("Registration Successful", response.message)
+        if response and response.status == "success":
+            messagebox.showinfo("Registration Succeeded", response.message)
         else:
-            messagebox.showerror(
-                "Registration Failed", "An error occurred during registration."
-            )
+            messagebox.showinfo("Registration Failed", response.message)
 
         # Clear the input fields
         self.username_entry.delete(0, tk.END)
         self.password_entry.delete(0, tk.END)
+
 
 
 class LoginForm(tk.Frame):

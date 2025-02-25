@@ -247,36 +247,131 @@ class LoginForm(tk.Frame):
         self.password_entry.delete(0, tk.END)
 
 
-# Stub classes for additional UI components (to be implemented later)
 class ChatBox(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
-        tk.Label(self, text="ChatBox (Not implemented)").pack()
+        self.username = None  # To be set upon login
+
+        tk.Label(self, text="Chat", font=("Helvetica", 16)).pack(pady=5)
+
+        # Receiver selection using OptionMenu
+        self.receiver_var = tk.StringVar(self)
+        self.receiver_var.set("Select Receiver")
+        self.receiver_menu = tk.OptionMenu(self, self.receiver_var, "Select Receiver")
+        self.receiver_menu.pack(pady=5)
+
+        # Frame for message entry and send button
+        self.message_frame = tk.Frame(self)
+        self.message_frame.pack(pady=10)
+
+        self.message_entry = tk.Entry(self.message_frame, width=50)
+        self.message_entry.pack(side=tk.LEFT, padx=5)
+
+        self.send_button = tk.Button(
+            self.message_frame, text="Send", command=self.send_message
+        )
+        self.send_button.pack(side=tk.LEFT, padx=5)
+
+    def send_message(self):
+        message = self.message_entry.get().strip()
+        receiver = self.receiver_var.get()
+        if not message:
+            messagebox.showwarning("Input Error", "Please enter a message.")
+            return
+        if receiver == "Select Receiver":
+            messagebox.showwarning("Input Error", "Please select a receiver.")
+            return
+        # Call the gRPC client's send_message method (stubbed for now)
+        response = self.master.grpc_client.send_message(message, receiver)
+        if response is None:
+            # Assume success for the placeholder implementation
+            logging.info(f"Sent message to {receiver}: {message}")
+            messagebox.showinfo("Message Sent", f"Message sent to {receiver}.")
+        else:
+            logging.info(f"Response from send_message: {response}")
+        # Clear the message entry
+        self.message_entry.delete(0, tk.END)
+
+    def fetch_users(self):
+        """
+        Populate the receiver dropdown with a dummy list of users.
+        This method can later be updated to call a gRPC method to fetch real user data.
+        """
+        dummy_users = ["user1", "user2", "user3"]
+        menu = self.receiver_menu["menu"]
+        menu.delete(0, "end")
+        for user in dummy_users:
+            menu.add_command(
+                label=user, command=lambda value=user: self.receiver_var.set(value)
+            )
+        if dummy_users:
+            self.receiver_var.set(dummy_users[0])
 
 
 class MessagesContainer(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
-        tk.Label(self, text="MessagesContainer (Not implemented)").pack()
+        self.recent_label = tk.Label(
+            self, text="Recent Messages", font=("Helvetica", 14)
+        )
+        self.recent_label.pack(pady=5)
+        self.recent_text = tk.Text(self, height=10, width=80)
+        self.recent_text.pack(pady=5)
+
+        self.unread_label = tk.Label(
+            self, text="Unread Messages", font=("Helvetica", 14)
+        )
+        self.unread_label.pack(pady=5)
+        self.unread_text = tk.Text(self, height=10, width=80)
+        self.unread_text.pack(pady=5)
 
     def add_recent_message(self, msg):
-        pass
+        display_text = (
+            f"{msg.get('timestamp')} - {msg.get('from')}: {msg.get('message')}\n"
+        )
+        self.recent_text.insert(tk.END, display_text)
+        self.recent_text.see(tk.END)
 
     def add_unread_message(self, msg):
-        pass
+        display_text = (
+            f"{msg.get('timestamp')} - {msg.get('from')}: {msg.get('message')}\n"
+        )
+        self.unread_text.insert(tk.END, display_text)
+        self.unread_text.see(tk.END)
 
 
 class DeleteAccountContainer(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
-        tk.Label(self, text="DeleteAccountContainer (Not implemented)").pack()
+        tk.Label(self, text="Account Settings", font=("Helvetica", 14)).pack(pady=5)
+        self.delete_button = tk.Button(
+            self, text="Delete Account", command=self.delete_account
+        )
+        self.delete_button.pack(pady=5)
+        self.username = None  # To be set after login
+
+    def delete_account(self):
+        if not self.username:
+            messagebox.showwarning("Warning", "No user logged in.")
+            return
+        if messagebox.askyesno(
+            "Confirm", "Are you sure you want to delete your account?"
+        ):
+            # Replace this stub with the actual gRPC call to delete the account.
+            messagebox.showinfo("Delete Account", "Account deletion requested (stub).")
 
 
 class NNewMessages(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
         self.username = ""
-        tk.Label(self, text="NNewMessages (Not implemented)").pack()
+        self.counter = 0
+        self.label = tk.Label(self, text="New Messages: 0", font=("Helvetica", 14))
+        self.label.pack(pady=5)
+
+    def update_count(self, count):
+        self.counter = count
+        self.label.config(text=f"New Messages: {self.counter}")
 
 
 if __name__ == "__main__":

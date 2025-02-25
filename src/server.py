@@ -3,6 +3,7 @@ from concurrent import futures
 import grpc
 import logging
 from users import authenticate_user, register_user
+from database import delete_message
 
 import protocols_pb2
 import protocols_pb2_grpc
@@ -116,17 +117,23 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             request.username,
             request.message_id,
         )
-        # Replace with your delete message logic.
-        return protocols_pb2.SuccessResponse(
-            message="Message deleted", status="success"
-        )
+        success = delete_message(request.message_id)
+        if success:
+            return protocols_pb2.SuccessResponse(
+                message="Message deleted", status="success"
+            )
+        else:
+            return protocols_pb2.SuccessResponse(
+                message="Failed to delete message", status="error"
+            )
+    
 
     def DeleteAccount(self, request, context):
-        logging.info("DeleteAccount called for user: %s", request.username)
-        # Replace with your delete account logic.
-        return protocols_pb2.SuccessResponse(
-            message="Account deleted", status="success"
-        )
+            logging.info("DeleteAccount called for user: %s", request.username)
+            # Replace with your delete account logic.
+            return protocols_pb2.SuccessResponse(
+                message="Account deleted", status="success"
+            )
 
 
 def serve():

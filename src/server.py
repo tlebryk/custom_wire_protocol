@@ -2,6 +2,7 @@
 from concurrent import futures
 import grpc
 import logging
+<<<<<<< HEAD
 import threading
 import time
 from datetime import datetime
@@ -13,6 +14,10 @@ from database import (
     get_undelivered_messages,
     delete_message,
 )
+=======
+from users import authenticate_user, register_user, delete_account
+from database import delete_message
+>>>>>>> origin/rpc-init
 
 import protocols_pb2
 import protocols_pb2_grpc
@@ -244,28 +249,16 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             request.username,
             request.message_id,
         )
-        try:
-            success = delete_message(request.message_id)
-            if success:
-                return protocols_pb2.SuccessResponse(
-                    message="Message deleted successfully.",
-                    status="success",
-                )
-            else:
-                context.set_details("Failed to delete message.")
-                context.set_code(grpc.StatusCode.INTERNAL)
-                return protocols_pb2.SuccessResponse(
-                    message="Failed to delete message.",
-                    status="error",
-                )
-        except Exception as e:
-            logging.error("Error in DeleteMessage: %s", e)
-            context.set_details("Internal server error during message deletion")
-            context.set_code(grpc.StatusCode.INTERNAL)
+        success = delete_message(request.message_id)
+        if success:
             return protocols_pb2.SuccessResponse(
-                message="Internal server error",
-                status="error",
+                message="Message deleted", status="success"
             )
+        else:
+            return protocols_pb2.SuccessResponse(
+                message="Failed to delete message", status="error"
+            )
+    
 
     def DeleteAccount(self, request, context):
         """
@@ -273,31 +266,17 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
         Expects a DeleteAccountRequest with field 'username'.
         """
         logging.info("DeleteAccount called for user: %s", request.username)
-        try:
-            success = delete_account(request.username)
-            if success:
-                with online_users_lock:
-                    if request.username in online_users:
-                        del online_users[request.username]
-                return protocols_pb2.SuccessResponse(
-                    message="Account deleted successfully.",
-                    status="success",
-                )
-            else:
-                context.set_details("Failed to delete account.")
-                context.set_code(grpc.StatusCode.INTERNAL)
-                return protocols_pb2.SuccessResponse(
-                    message="Failed to delete account.",
-                    status="error",
-                )
-        except Exception as e:
-            logging.error("Error in DeleteAccount: %s", e)
-            context.set_details("Internal server error during account deletion")
-            context.set_code(grpc.StatusCode.INTERNAL)
+        success = delete_account(request.username)
+        if success:
             return protocols_pb2.SuccessResponse(
-                message="Internal server error",
-                status="error",
+                message="Account deleted", status="success"
             )
+        else:
+            return protocols_pb2.SuccessResponse(
+                message="Failed to delete account", status="error"
+            )
+        
+
 
 
 def serve():

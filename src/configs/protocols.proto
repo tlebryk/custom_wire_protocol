@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package messaging;
 
-// Define the action IDs as an enum. These can be useful if you need to route based on numeric IDs.
+// Define the action IDs as an enum.
 enum ActionIds {
   UNKNONE = 0;
   SUCCESS = 1;
@@ -31,7 +31,6 @@ enum ActionIds {
 
 // ---------- Request and Response Messages ----------
 
-// Login
 message LoginRequest {
   string username = 1;
   string password = 2;
@@ -43,7 +42,6 @@ message ConfirmLoginResponse {
   string status = 3;
 }
 
-// Register
 message RegisterRequest {
   string username = 1;
   string password = 2;
@@ -59,7 +57,6 @@ message ErrorResponse {
   string status = 2;
 }
 
-// Send Message
 message SendMessageRequest {
   string message = 1;
   string receiver = 2;
@@ -72,7 +69,6 @@ message ConfirmSendMessageResponse {
   string timestamp = 4;
 }
 
-// Echo
 message EchoRequest {
   string message = 1;
 }
@@ -82,7 +78,6 @@ message ConfirmEchoResponse {
   string status = 2;
 }
 
-// Chat message type used in message lists
 message ChatMessage {
   string message = 1;
   string timestamp = 2;
@@ -90,25 +85,21 @@ message ChatMessage {
   int32 id = 4;
 }
 
-// Recent messages response
 message RecentMessagesResponse {
   repeated ChatMessage messages = 1;
   string status = 2;
 }
 
-// Unread messages response
 message UnreadMessagesResponse {
   repeated ChatMessage messages = 1;
   string status = 2;
 }
 
-// Set number of unread messages
 message SetNUnreadMessagesRequest {
   string username = 1;
   int32 n_unread_messages = 2;
 }
 
-// Mark messages as read
 message MarkAsReadRequest {
   repeated int32 message_ids = 1;
 }
@@ -118,18 +109,15 @@ message ConfirmMarkAsReadResponse {
   string status = 2;
 }
 
-// Delete message
 message DeleteMessageRequest {
   string username = 1;
   int32 message_id = 2;
 }
 
-// Delete account
 message DeleteAccountRequest {
   string username = 1;
 }
 
-// Received message (could be used in a streaming RPC)
 message ReceivedMessage {
   string from = 1;
   string message = 2;
@@ -139,55 +127,30 @@ message ReceivedMessage {
   string username = 6;
 }
 
-// Get recent messages
+// New: SubscribeRequest for receiving messages synchronously.
+message SubscribeRequest {
+  string username = 1;
+}
+
 message GetRecentMessagesRequest {
   string username = 1;
 }
 
-// Get unread messages
 message GetUnreadMessagesRequest {
   string username = 1;
 }
 
-// Confirm set n unread messages
-message ConfirmSetNUnreadMessagesResponse {
-  string message = 1;
-  string status = 2;
-}
-
 // ---------- Service Definition ----------
-
 service MessagingService {
-  // Login RPC: Client sends LoginRequest and receives ConfirmLoginResponse.
   rpc Login(LoginRequest) returns (ConfirmLoginResponse);
-  
-  // Register RPC: Client sends RegisterRequest and receives SuccessResponse (or ErrorResponse on failure).
   rpc Register(RegisterRequest) returns (SuccessResponse);
-  
-  // Send message RPC
   rpc SendMessage(SendMessageRequest) returns (ConfirmSendMessageResponse);
-  
-  // Echo RPC
   rpc Echo(EchoRequest) returns (ConfirmEchoResponse);
-  
-  // Retrieve recent messages
   rpc GetRecentMessages(GetRecentMessagesRequest) returns (RecentMessagesResponse);
-  
-  // Retrieve unread messages
   rpc GetUnreadMessages(GetUnreadMessagesRequest) returns (UnreadMessagesResponse);
-  
-  // Set number of unread messages
   rpc SetNUnreadMessages(SetNUnreadMessagesRequest) returns (SuccessResponse);
-  
-  // Mark messages as read
   rpc MarkAsRead(MarkAsReadRequest) returns (ConfirmMarkAsReadResponse);
-  
-  // Delete a message
   rpc DeleteMessage(DeleteMessageRequest) returns (SuccessResponse);
-  
-  // Delete an account
   rpc DeleteAccount(DeleteAccountRequest) returns (SuccessResponse);
-
-  // Optionally, you could define a server streaming RPC for pushing received messages:
-  // rpc SubscribeToMessages(SubscribeRequest) returns (stream ReceivedMessage);
+  rpc Subscribe(SubscribeRequest) returns (stream ReceivedMessage);
 }

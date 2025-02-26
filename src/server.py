@@ -240,6 +240,10 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             )
 
     def DeleteMessage(self, request, context):
+        """
+        Handles deletion of a message.
+        Expects a DeleteMessageRequest with fields 'username' and 'message_id'.
+        """
         logging.info(
             "DeleteMessage called for user: %s, message_id: %d",
             request.username,
@@ -269,6 +273,10 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             )
 
     def DeleteAccount(self, request, context):
+        """
+        Handles deletion of an account.
+        Expects a DeleteAccountRequest with field 'username'.
+        """
         logging.info("DeleteAccount called for user: %s", request.username)
         try:
             success = delete_account(request.username)

@@ -519,6 +519,32 @@ class MessagesContainer(tk.Frame):
     def read_message(self, msg_id: int, frame: tk.Frame) -> None:
         response = self.master.grpc_client.mark_as_read([msg_id])
         if response:
+            # Extract text from the label (assumes format: "From {sender} at {timestamp}: {message}")
+            try:
+                msg_text = frame.winfo_children()[0].cget("text")
+                # Example text: "From alice at 2025-02-11 15:30: Hello, world!"
+                # First, split by " at " to separate sender and rest.
+                sender_part, sep, remainder = msg_text.partition(" at ")
+                sender = (
+                    sender_part.split(" ")[1] if len(sender_part.split(" ")) > 1 else ""
+                )
+                # Now split remainder by ": " to separate timestamp and message.
+                timestamp_part, sep, message_content = remainder.partition(": ")
+                timestamp = timestamp_part.strip()
+            except Exception as e:
+                logging.error("Error parsing message text: %s", e)
+                sender = ""
+                timestamp = ""
+                message_content = msg_text
+            message_data = {
+                "id": msg_id,
+                "from": sender,
+                "timestamp": timestamp,
+                "message": message_content,
+            }
+            # Add the message to the recent messages section.
+            self.add_recent_message(message_data)
+            # Remove from unread messages UI.
             frame.destroy()
             del self.unread_messages_dict[msg_id]
         else:

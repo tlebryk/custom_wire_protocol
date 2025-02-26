@@ -332,6 +332,25 @@ def get_all_users_except(username: str) -> List[str]:
 
     return users
 
+def search_users_in_db(query: str) -> List[str]:
+    """
+    Searches for users whose usernames start with the given query string.
+
+    Args:
+        query (str): The prefix string to search for.
+
+    Returns:
+        List[str]: A list of matching usernames.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT username FROM users WHERE username LIKE ?", (query + '%',))
+    users = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return users
+
+
 
 # Initialize the database when the module is imported
 initialize_database()

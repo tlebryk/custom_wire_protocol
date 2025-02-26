@@ -287,3 +287,11 @@ class GRPCClient:
         except grpc.RpcError as e:
             logging.error("GetUsers RPC failed: %s", e)
             return []
+
+    def search_users(self, query):
+        request = protocols_pb2.SearchUsersRequest(query=query)
+        response = self.stub.SearchUsers(request)
+        if response.status == "success":
+            return response.usernames
+        else:
+            return []

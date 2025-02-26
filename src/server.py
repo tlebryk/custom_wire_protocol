@@ -13,6 +13,8 @@ from database import (
     get_undelivered_messages,
     get_unread_messages,
     delete_message,
+    set_n_unread_messages,
+    get_user_info,
     mark_messages_as_read,  # Newly imported function
 )
 
@@ -167,8 +169,19 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
     def GetRecentMessages(self, request, context):
         username = request.username
+        # get user info
+        user_info = get_user_info(username)
+        n_message_index = 1
+        if user_info:
+            n_unread_messages = user_info[n_message_index]
+            if not n_unread_messages:
+                n_unread_messages = 50
+
+        else:
+            logging.info(f"User '{context.username}' not found in database.")
+            n_unread_messages = 50
         try:
-            recent_tuples = get_recent_messages(username, limit=50)
+            recent_tuples = get_recent_messages(username, limit=n_unread_messages)
         except Exception as e:
             logging.error("Error fetching recent messages for %s: %s", username, e)
             context.set_details("Error fetching recent messages")
@@ -201,8 +214,18 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
     def GetUnreadMessages(self, request, context):
         username = request.username
+        user_info = get_user_info(username)
+        n_message_index = 1
+        if user_info:
+            n_unread_messages = user_info[n_message_index]
+            if not n_unread_messages:
+                n_unread_messages = 50
+
+        else:
+            logging.info(f"User '{context.username}' not found in database.")
+            n_unread_messages = 50
         try:
-            unread_tuples = get_unread_messages(username)
+            unread_tuples = get_unread_messages(username, limit=n_unread_messages)
         except Exception as e:
             logging.error("Error fetching unread messages for %s: %s", username, e)
             context.set_details("Error fetching unread messages")
@@ -313,6 +336,31 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             return protocols_pb2.SuccessResponse(
                 message="Internal server error",
                 status="error",
+            )
+
+    def SetNUnreadMessages(self, request, context):
+        """
+        Handles the request to set the number of unread messages for a user.
+        """
+        username = request.username
+        n_unread = request.n_unread_messages
+        if not n_unread:
+            context.set_details("Number of unread messages is required.")
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            return protocols_pb2.SuccessResponse(
+                message="Number of unread messages is required.", status="error"
+            )
+        # Call the backend function to set the unread messages count.
+        success = set_n_unread_messages(username, n_unread)
+        if success:
+            return protocols_pb2.SuccessResponse(
+                message="Number of unread messages set successfully.", status="success"
+            )
+        else:
+            context.set_details("Failed to set number of unread messages.")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.SuccessResponse(
+                message="Failed to set number of unread messages.", status="error"
             )
 
 

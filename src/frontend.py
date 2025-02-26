@@ -632,12 +632,40 @@ class NNewMessages(tk.Frame):
         super().__init__(parent)
         self.username = ""
         self.counter = 0
-        self.label = tk.Label(self, text="New Messages: 0", font=("Helvetica", 14))
-        self.label.pack(pady=5)
+        # Label showing current new messages count
+        # Entry for user to input a numeric value
+        self.user_input = tk.Entry(self, width=10)
+        self.user_input.pack(pady=5)
+        # Button to set the unread messages count
+        self.set_button = tk.Button(
+            self, text="Set Unread Message Count", command=self.set_unread_messages
+        )
+        self.set_button.pack(pady=5)
 
     def update_count(self, count):
         self.counter = count
-        self.label.config(text=f"New Messages: {self.counter}")
+        # self.label.config(text=f"New Messages: {self.counter}")
+
+    def set_unread_messages(self) -> None:
+        number = self.user_input.get().strip()
+        if not number.isdigit():
+            messagebox.showerror("Input Error", "Please enter a valid number.")
+            return
+
+        n_unread_messages = int(number)
+        # Call the gRPC client's set_n_unread_messages method.
+        response = self.master.grpc_client.set_n_unread_messages(
+            self.username, n_unread_messages
+        )
+        if response and response.status == "success":
+            messagebox.showinfo(
+                "Set Unread Messages",
+                f"Set to display {n_unread_messages} unread messages.",
+            )
+        else:
+            messagebox.showerror(
+                "Set Unread Messages", "Failed to set unread message count."
+            )
 
 
 if __name__ == "__main__":

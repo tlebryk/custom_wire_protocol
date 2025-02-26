@@ -274,7 +274,9 @@ def set_n_unread_messages(username: str, n_unread_messages: int) -> bool:
     """
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-
+    logging.info(
+        "set_n_unread_messages query: %s for user: %s", n_unread_messages, username
+    )
     cursor.execute(
         "UPDATE users SET n_unread_messages = ? WHERE username = ?",
         (n_unread_messages, username),

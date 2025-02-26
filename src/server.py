@@ -167,7 +167,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 status="error",
                 timestamp="",
             )
-        
+
     def GetUsers(self, request, context):
         try:
             # get users and exclude the current user from the list
@@ -175,17 +175,14 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             return protocols_pb2.GetUsersResponse(
                 usernames=users,
                 status="success",
-                message="User list fetched successfully."
+                message="User list fetched successfully.",
             )
         except Exception as e:
             context.set_details("Error fetching user list")
             context.set_code(grpc.StatusCode.INTERNAL)
             return protocols_pb2.GetUsersResponse(
-                usernames=[],
-                status="error",
-                message=str(e)
+                usernames=[], status="error", message=str(e)
             )
-
 
     def GetRecentMessages(self, request, context):
         username = request.username
@@ -388,28 +385,6 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
         # Update the unread messages count in the database.
         success = set_n_unread_messages(username, n_unread)
         if success:
-            # If the new count is greater than the old, and the user is online,
-            # immediately enqueue additional messages.
-            # Attempt to fetch recent messages.
-            # try:
-            #     recent_tuples = get_recent_messages(username, limit=n_unread)
-            #     for tup in recent_tuples:
-            #         # Assume tuple order: (sender, content, receiver, timestamp, msg_id)
-            #         sender, content, receiver, timestamp, msg_id = tup
-            #         received_msg = protocols_pb2.ReceivedMessage(
-            #             **{
-            #                 "message": content,
-            #                 "from": sender,
-            #                 "timestamp": timestamp,
-            #                 "read": "false",
-            #                 "id": msg_id,
-            #                 "username": sender,
-            #             }
-            #         )
-            #         enqueue_message(username, received_msg)
-            # except Exception as e:
-            #     logging.error("Error fetching recent messages: %s", e)
-            # Attempt to fetch unread (undelivered) messages.
             try:
                 unread_tuples = get_unread_messages(username, limit=n_unread)
                 # Assume corrected tuple order: (msg_id, sender, content, timestamp)

@@ -16,6 +16,7 @@ from database import (
     get_all_users_except,
     DB_FILE,
 )
+from time import sleep
 
 
 @pytest.fixture(autouse=True)
@@ -86,6 +87,7 @@ def test_undelivered_messages():
     # Verify no undelivered messages remain
     undelivered = get_undelivered_messages("test_user2")
     assert len(undelivered) == 0
+    sleep(0.5)
 
 
 def test_unread_messages():
@@ -107,6 +109,7 @@ def test_unread_messages():
     unread = get_unread_messages("test_user2")
     assert len(unread) == 1
     assert unread[0][2] == "Unread 2"  # content
+    sleep(0.5)
 
 
 def test_user_info():
@@ -124,6 +127,8 @@ def test_user_info():
     # Verify update
     user_info = get_user_info("test_user1")
     assert user_info[1] == 5
+    # occasionally teardown has race condition.
+    sleep(0.5)
 
 
 def test_delete_message():
@@ -141,6 +146,7 @@ def test_delete_message():
     )  # Mark as read to make it visible in recent messages
     messages = get_recent_messages("test_user2")
     assert len(messages) == 0
+    sleep(0.5)
 
 
 def test_get_all_users_except():
@@ -149,6 +155,7 @@ def test_get_all_users_except():
     assert len(users) == 1
     assert "test_user2" in users
     assert "test_user1" not in users
+    sleep(0.5)
 
 
 def test_message_timestamp_format():
@@ -164,6 +171,7 @@ def test_message_timestamp_format():
         assert timestamp.endswith("Z")  # Check UTC marker
     except ValueError:
         pytest.fail("Timestamp is not in valid ISO format")
+    sleep(0.5)
 
 
 def test_message_ordering():
@@ -181,6 +189,7 @@ def test_message_ordering():
     assert len(messages) == 3
     for i, message in enumerate(messages):
         assert message[1] == f"Message {i}"
+    sleep(0.5)
 
 
 def test_non_existent_user():
@@ -190,3 +199,4 @@ def test_non_existent_user():
 
     users = get_all_users_except("non_existent_user")
     assert len(users) == 2  # should still return all users
+    sleep(0.5)

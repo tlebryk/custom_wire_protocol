@@ -50,8 +50,6 @@ class ChatApp(tk.Tk):
         self.messages_container = MessagesContainer(self)
         self.delete_account_container = DeleteAccountContainer(self)
 
-        # self.mode = mode if mode else os.environ.get("MODE", "grpc")
-
     def start_message_listener(self, username: str):
         """
         Starts a thread that subscribes for incoming messages and updates the UI.

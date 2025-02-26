@@ -177,7 +177,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
             with online_users_lock:
                 logging.info("ONLINE USERS: %s", online_users)
-                receiver_entry = online_users.get(request.receiver)
+            receiver_entry = online_users.get(request.receiver)
 
             if receiver_entry:
                 enqueue_message(request.receiver, received_msg)

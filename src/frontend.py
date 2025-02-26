@@ -53,7 +53,10 @@ class GRPCClient:
             request = protocols_pb2.SendMessageRequest(
                 message=message, receiver=receiver
             )
-            response = self.stub.SendMessage(request)
+            # Pass sender in metadata (if needed, the client can manage that)
+            response = self.stub.SendMessage(
+                request, metadata=(("sender", self.username),)
+            )
             return response
         except grpc.RpcError as e:
             logging.error("SendMessage RPC failed: %s", e)
@@ -117,6 +120,14 @@ class GRPCClient:
             logging.error("DeleteAccount RPC failed: %s", e)
             return None
 
+    def subscribe(self, username: str):
+        try:
+            request = protocols_pb2.SubscribeRequest(username=username)
+            return self.stub.Subscribe(request)
+        except grpc.RpcError as e:
+            logging.error("Subscribe RPC failed: %s", e)
+            return None
+
 
 class ChatApp(tk.Tk):
     def __init__(self, mode: str = None):
@@ -127,6 +138,8 @@ class ChatApp(tk.Tk):
 
         # Initialize gRPC client
         self.grpc_client = GRPCClient()
+        # We'll set the client's username after login.
+        self.grpc_client.username = ""
 
         # Create Authentication Box
         self.auth_box = AuthBox(self)
@@ -140,8 +153,32 @@ class ChatApp(tk.Tk):
 
         self.mode = mode if mode else os.environ.get("MODE", "grpc")
 
+    def start_message_listener(self, username: str):
+        """
+        Starts a thread that subscribes for incoming messages and updates the UI.
+        """
+
+        def listen():
+            subscribe_iter = self.grpc_client.subscribe(username)
+            if subscribe_iter is None:
+                logging.error("Subscribe iterator is None")
+                return
+            for received_msg in subscribe_iter:
+                # Convert ReceivedMessage proto to dict.
+                msg_dict = {
+                    "timestamp": received_msg.timestamp,
+                    "from": getattr(received_msg, "from"),
+                    "message": received_msg.message,
+                    "id": received_msg.id,
+                }
+                # Schedule UI update on the main thread.
+                self.after(
+                    0, lambda m=msg_dict: self.messages_container.add_unread_message(m)
+                )
+
+        threading.Thread(target=listen, daemon=True).start()
+
     def get_unread_messages(self):
-        # Retrieve unread messages via gRPC and update the MessagesContainer
         username = self.n_new_messages.username
         if username:
             response = self.grpc_client.get_unread_messages(username)
@@ -156,7 +193,6 @@ class ChatApp(tk.Tk):
                     self.messages_container.add_unread_message(msg_dict)
 
     def get_recent_messages(self):
-        # Retrieve recent messages via gRPC and update the MessagesContainer
         username = self.n_new_messages.username
         if username:
             response = self.grpc_client.get_recent_messages(username)
@@ -171,15 +207,9 @@ class ChatApp(tk.Tk):
                     self.messages_container.add_recent_message(msg_dict)
 
     def switch_to_chat_screen(self):
-        """
-        Transition the UI from authentication to chat interface.
-        """
-        # Hide authentication forms
         self.auth_box.login_form.pack_forget()
         self.auth_box.register_form.pack_forget()
         self.auth_box.toggle_button.pack_forget()
-
-        # Show chat UI components
         self.delete_account_container.pack(pady=10)
         self.n_new_messages.pack(pady=10)
         self.chat_box.pack(pady=10)
@@ -192,14 +222,10 @@ class ChatApp(tk.Tk):
 class AuthBox(tk.Frame):
     def __init__(self, parent: tk.Tk) -> None:
         super().__init__(parent)
-        # Initialize with Login Form visible
         self.login_form = LoginForm(parent)
         self.register_form = RegisterForm(parent)
-
         self.login_form.pack(pady=10)
-        self.current_form: str = "login"  # Track the currently displayed form
-
-        # Toggle Button
+        self.current_form: str = "login"
         self.toggle_button: tk.Button = tk.Button(
             self,
             text="Don't have an account? Register here.",
@@ -208,9 +234,6 @@ class AuthBox(tk.Frame):
         self.toggle_button.pack(pady=5)
 
     def toggle_forms(self) -> None:
-        """
-        Toggle between Login and Register forms.
-        """
         if self.current_form == "login":
             self.login_form.pack_forget()
             self.register_form.pack(pady=10)
@@ -227,38 +250,27 @@ class RegisterForm(tk.Frame):
     def __init__(self, parent: tk.Tk) -> None:
         super().__init__(parent)
         tk.Label(self, text="Register", font=("Helvetica", 14)).pack(pady=5)
-
         tk.Label(self, text="Username:").pack()
         self.username_entry: tk.Entry = tk.Entry(self)
         self.username_entry.pack(pady=5)
-
         tk.Label(self, text="Password:").pack()
         self.password_entry: tk.Entry = tk.Entry(self, show="*")
         self.password_entry.pack(pady=5)
-
         tk.Button(self, text="Register", command=self.register).pack(pady=10)
 
     def register(self):
-        """
-        Register a new user using gRPC.
-        """
         username = self.username_entry.get().strip()
         password = self.password_entry.get().strip()
-
         if not username or not password:
             messagebox.showwarning(
                 "Input Error", "Please enter both username and password."
             )
             return
-
-        # Call the gRPC register method
         response = self.master.grpc_client.register(username, password)
         if response and response.status == "success":
             messagebox.showinfo("Registration Succeeded", response.message)
         else:
             messagebox.showinfo("Registration Failed", response.message)
-
-        # Clear the input fields
         self.username_entry.delete(0, tk.END)
         self.password_entry.delete(0, tk.END)
 
@@ -266,51 +278,40 @@ class RegisterForm(tk.Frame):
 class LoginForm(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
-
         tk.Label(self, text="Login", font=("Helvetica", 14)).pack(pady=5)
-
         tk.Label(self, text="Username:").pack()
         self.username_entry = tk.Entry(self)
         self.username_entry.pack(pady=5)
-
         tk.Label(self, text="Password:").pack()
         self.password_entry = tk.Entry(self, show="*")
         self.password_entry.pack(pady=5)
-
         tk.Button(self, text="Login", command=self.login).pack(pady=10)
 
     def login(self) -> None:
-        """
-        Log in using the gRPC client.
-        """
         username: str = self.username_entry.get().strip()
         password: str = self.password_entry.get().strip()
-
         if not username or not password:
             messagebox.showwarning(
                 "Input Error", "Please enter both username and password."
             )
             return
-
-        # Call the gRPC login method
         response = self.master.grpc_client.login(username, password)
         if response and response.status == "success":
             messagebox.showinfo("Login Successful", response.message)
-            # Set username and switch to chat screen
             self.master.n_new_messages.username = response.username
             self.master.chat_box.username = response.username
             self.master.messages_container.username = response.username
             self.master.delete_account_container.username = response.username
+            self.master.grpc_client.username = response.username  # Save sender info
             self.master.switch_to_chat_screen()
             self.master.get_unread_messages()
             self.master.get_recent_messages()
+            self.master.start_message_listener(response.username)
         else:
             error_msg = (
                 response.message if response else "An error occurred during login."
             )
             messagebox.showerror("Login Failed", error_msg)
-
-        # Clear the input fields
         self.username_entry.delete(0, tk.END)
         self.password_entry.delete(0, tk.END)
 
@@ -319,40 +320,29 @@ class ChatBox(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
         self.username = None
-
-        # Receiver Username Frame
         receiver_frame = tk.Frame(self)
         receiver_frame.pack(pady=5)
         tk.Label(receiver_frame, text="Receiver Username:").pack(side=tk.LEFT, padx=5)
-
-        self.user_list = []  # List of available users
+        self.user_list = []
         self.selected_user = tk.StringVar(self)
-        self.selected_user.set("Select a user")  # Default placeholder
+        self.selected_user.set("Select a user")
         self.user_dropdown = tk.OptionMenu(
             receiver_frame, self.selected_user, "Select a user", *self.user_list
         )
         self.user_dropdown.pack(side=tk.LEFT, padx=5)
-
-        # Refresh button to fetch users
         tk.Button(receiver_frame, text="Refresh", command=self.fetch_users).pack(
             side=tk.LEFT, padx=5
         )
-
-        # Message Text Frame
         message_frame = tk.Frame(self)
         message_frame.pack(pady=5)
         tk.Label(message_frame, text="Message:").pack(side=tk.LEFT, padx=5)
         self.message_text = tk.Entry(message_frame, width=50)
         self.message_text.pack(side=tk.LEFT, padx=5)
-
-        # Send Button
         send_button = tk.Button(self, text="Send", command=self.send_message)
         send_button.pack(pady=5)
-
-        # Error Message Box
         self.error_box = tk.Label(self, text="", fg="red")
         self.error_box.pack(pady=5)
-        self.error_box.pack_forget()  # Initially hidden
+        self.error_box.pack_forget()
 
     def send_message(self):
         receiver = self.selected_user.get()
@@ -363,19 +353,13 @@ class ChatBox(tk.Frame):
         if not message:
             self.display_error("Message cannot be empty.")
             return
-
-        # Clear any previous error
         self.error_box.pack_forget()
-
-        # Call the gRPC client's send_message method
         response = self.master.grpc_client.send_message(message, receiver)
         if response is None:
-            # Assume success if no error response is returned.
             logging.info(f"Sent message to {receiver}: {message}")
             messagebox.showinfo("Message Sent", f"Message sent to {receiver}.")
         else:
             logging.info(f"Response from send_message: {response}")
-        # Clear the message input field.
         self.message_text.delete(0, tk.END)
 
     def display_error(self, message):
@@ -383,30 +367,19 @@ class ChatBox(tk.Frame):
         self.error_box.pack()
 
     def update_user_list(self, users):
-        """
-        Updates the dropdown with the latest list of users.
-        """
         if not users:
             self.selected_user.set("No users available")
             return
-
         self.user_list = users
-        self.selected_user.set(users[0])  # Set the first user as default
-
+        self.selected_user.set(users[0])
         menu = self.user_dropdown["menu"]
-        menu.delete(0, "end")  # Clear previous entries
-
+        menu.delete(0, "end")
         for user in users:
             menu.add_command(
                 label=user, command=lambda value=user: self.selected_user.set(value)
             )
 
     def fetch_users(self):
-        """
-        Simulates a request to fetch all users except the logged-in user.
-        In a real implementation, this would call a gRPC method.
-        """
-        # For now, we use dummy data.
         dummy_users = ["a", "aaa", "ab"]
         self.update_user_list(dummy_users)
 
@@ -415,63 +388,48 @@ class MessagesContainer(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
         self.username = None
-
-        # Dictionaries to store messages with their IDs
         self.unread_messages_dict = {}
         self.recent_messages_dict = {}
-
-        # Create scrollable sections for Unread and Recent Messages
         self.create_scrollable_sections()
 
     def create_scrollable_sections(self):
-        # Unread Messages Section
         self.configure(width=600)
         unread_section = tk.LabelFrame(
             self, text="Unread Messages", padx=5, pady=5, width=600
         )
         unread_section.pack(side=tk.TOP, padx=5, pady=5, fill=tk.BOTH, expand=True)
-
         unread_canvas = tk.Canvas(unread_section, borderwidth=0, width=580)
         unread_scrollbar = tk.Scrollbar(
             unread_section, orient="vertical", command=unread_canvas.yview
         )
         self.unread_messages_frame = tk.Frame(unread_canvas)
-
         self.unread_messages_frame.bind(
             "<Configure>",
             lambda e: unread_canvas.configure(scrollregion=unread_canvas.bbox("all")),
         )
-
         unread_canvas.create_window(
             (0, 0), window=self.unread_messages_frame, anchor="nw"
         )
         unread_canvas.configure(yscrollcommand=unread_scrollbar.set)
-
         unread_canvas.pack(side="left", fill="both", expand=True)
         unread_scrollbar.pack(side="right", fill="y")
-
-        # Recent Messages Section
         recent_section = tk.LabelFrame(
             self, text="Recent Messages", padx=5, pady=5, width=600
         )
         recent_section.pack(side=tk.TOP, padx=5, pady=5, fill=tk.BOTH, expand=True)
-
         recent_canvas = tk.Canvas(recent_section, borderwidth=0, width=580)
         recent_scrollbar = tk.Scrollbar(
             recent_section, orient="vertical", command=recent_canvas.yview
         )
         self.recent_messages_frame = tk.Frame(recent_canvas)
-
         self.recent_messages_frame.bind(
             "<Configure>",
             lambda e: recent_canvas.configure(scrollregion=recent_canvas.bbox("all")),
         )
-
         recent_canvas.create_window(
             (0, 0), window=self.recent_messages_frame, anchor="nw"
         )
         recent_canvas.configure(yscrollcommand=recent_scrollbar.set)
-
         recent_canvas.pack(side="left", fill="both", expand=True)
         recent_scrollbar.pack(side="right", fill="y")
 
@@ -481,16 +439,11 @@ class MessagesContainer(tk.Frame):
                 "No Unread Messages", "There are no unread messages to mark as read."
             )
             return
-
-        # Prepare message IDs
-        message_ids: List[int] = list(self.unread_messages_dict.keys())
+        message_ids = list(self.unread_messages_dict.keys())
         response = self.master.grpc_client.mark_as_read(message_ids)
         if response:
-            # Move each unread message to recent messages
             for msg_id, frame in list(self.unread_messages_dict.items()):
-                # Extract text from the label (assuming first child holds the message text)
                 msg_text = frame.winfo_children()[0].cget("text")
-                # For simplicity, we re-use the same text for recent messages.
                 message_data = {
                     "id": msg_id,
                     "from": msg_text.split(" ")[1] if " " in msg_text else "",
@@ -522,8 +475,6 @@ class MessagesContainer(tk.Frame):
         if not msg_id:
             logging.error("Message data missing 'id'.")
             return
-
-        # Format timestamp (assuming ISO format with microseconds and timezone)
         try:
             timestamp_obj = datetime.datetime.strptime(
                 timestamp, "%Y-%m-%dT%H:%M:%S.%f%z"
@@ -532,17 +483,13 @@ class MessagesContainer(tk.Frame):
         except Exception as e:
             logging.error("Timestamp parsing failed: %s", e)
             timestamp_str = timestamp
-
-        # Avoid duplicate messages
         if msg_id in self.unread_messages_dict:
             logging.info(f"Message {msg_id} already exists in unread messages.")
             return
-
         msg_frame = tk.Frame(
             self.unread_messages_frame, bd=1, relief=tk.RIDGE, padx=5, pady=5
         )
         msg_frame.pack(fill=tk.X, pady=2)
-
         msg_label = tk.Label(
             msg_frame,
             text=f"From {sender} at {timestamp_str}: {message}",
@@ -551,8 +498,6 @@ class MessagesContainer(tk.Frame):
             wraplength=300,
         )
         msg_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        # Button to mark as read
         read_button = tk.Button(
             msg_frame,
             text="Read",
@@ -560,8 +505,6 @@ class MessagesContainer(tk.Frame):
             command=lambda mid=msg_id, mf=msg_frame: self.read_message(mid, mf),
         )
         read_button.pack(side=tk.RIGHT, padx=5)
-
-        # Button to delete message
         delete_button = tk.Button(
             msg_frame,
             text="Delete",
@@ -571,7 +514,6 @@ class MessagesContainer(tk.Frame):
             ),
         )
         delete_button.pack(side=tk.RIGHT, padx=5)
-
         self.unread_messages_dict[msg_id] = msg_frame
 
     def read_message(self, msg_id: int, frame: tk.Frame) -> None:
@@ -579,7 +521,6 @@ class MessagesContainer(tk.Frame):
         if response:
             frame.destroy()
             del self.unread_messages_dict[msg_id]
-            # Optionally, add to recent messages if desired.
         else:
             messagebox.showerror("Error", "Failed to mark message as read.")
 
@@ -591,12 +532,10 @@ class MessagesContainer(tk.Frame):
         if not msg_id:
             logging.error("Message data missing 'id'.")
             return
-
         msg_frame = tk.Frame(
             self.recent_messages_frame, bd=1, relief=tk.RIDGE, padx=5, pady=5
         )
         msg_frame.pack(fill=tk.X, pady=2)
-
         msg_label = tk.Label(
             msg_frame,
             text=f"From {sender} at {timestamp}: {message}",
@@ -605,7 +544,6 @@ class MessagesContainer(tk.Frame):
             wraplength=300,
         )
         msg_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
         delete_button = tk.Button(
             msg_frame,
             text="Delete",
@@ -615,7 +553,6 @@ class MessagesContainer(tk.Frame):
             ),
         )
         delete_button.pack(side=tk.RIGHT, padx=5)
-
         self.recent_messages_dict[msg_id] = msg_frame
 
     def delete_message(
@@ -626,13 +563,11 @@ class MessagesContainer(tk.Frame):
         )
         if not confirm:
             return
-
         frame.destroy()
         if section == "unread" and msg_id in self.unread_messages_dict:
             del self.unread_messages_dict[msg_id]
         elif section == "recent" and msg_id in self.recent_messages_dict:
             del self.recent_messages_dict[msg_id]
-
         response = self.master.grpc_client.delete_message(
             self.master.n_new_messages.username, msg_id
         )
@@ -650,7 +585,7 @@ class DeleteAccountContainer(tk.Frame):
             self, text="Delete Account", command=self.delete_account
         )
         self.delete_button.pack(pady=5)
-        self.username = None  # To be set after login
+        self.username = None
 
     def delete_account(self):
         if not self.username:

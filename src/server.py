@@ -6,9 +6,15 @@ import threading
 import time
 from datetime import datetime
 
-
 from users import authenticate_user, register_user, delete_account
-from database import delete_message
+from database import (
+    insert_message,
+    get_recent_messages,
+    get_undelivered_messages,
+    get_unread_messages,
+    delete_message,
+    mark_messages_as_read,  # Newly imported function
+)
 
 import protocols_pb2
 import protocols_pb2_grpc
@@ -16,16 +22,15 @@ import protocols_pb2_grpc
 logging.basicConfig(level=logging.INFO)
 
 # Global dictionary to track online users.
-# Key: username, Value: a tuple (context, queue) where queue is a list of messages pending delivery.
+# Key: username, Value: a tuple (context, queue) where queue is a list of ReceivedMessage messages.
 online_users = {}
 online_users_lock = threading.Lock()
 
 
-# In a real system you’d likely use a thread-safe queue per user.
 def enqueue_message(username, message):
     with online_users_lock:
         if username in online_users:
-            context, msg_queue = online_users[username]
+            user_context, msg_queue = online_users[username]
             msg_queue.append(message)
 
 
@@ -33,6 +38,8 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
     def Login(self, request, context):
         logging.info("Login called for user: %s", request.username)
         if authenticate_user(request.username, request.password):
+            with online_users_lock:
+                online_users[request.username] = (context, [])
             return protocols_pb2.ConfirmLoginResponse(
                 username=request.username,
                 message="Logged in successfully",
@@ -60,31 +67,25 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             )
 
     def Subscribe(self, request, context):
-        """
-        This streaming RPC registers a user as online.
-        The client should call Subscribe (after login) and then block on the stream.
-        When the server has a message for this user, it will yield it.
-        """
-        username = request.username
-        logging.info("Subscribe called for user: %s", username)
+        logging.info("Subscribe called for user: %s", request.username)
         with online_users_lock:
-            online_users[username] = (context, [])
+            online_users[request.username] = (context, [])
         try:
             while context.is_active():
                 with online_users_lock:
-                    _, msg_queue = online_users.get(username, (None, []))
+                    _, msg_queue = online_users.get(request.username, (None, []))
                     if msg_queue:
                         while msg_queue:
                             msg = msg_queue.pop(0)
                             yield msg
                 time.sleep(0.5)
         except Exception as e:
-            logging.error("Error in Subscribe for user %s: %s", username, e)
+            logging.error("Error in Subscribe for user %s: %s", request.username, e)
         finally:
             with online_users_lock:
-                if username in online_users:
-                    del online_users[username]
-            logging.info("User %s unsubscribed.", username)
+                if request.username in online_users:
+                    del online_users[request.username]
+            logging.info("User %s unsubscribed.", request.username)
 
     def SendMessage(self, request, context):
         logging.info(
@@ -93,7 +94,6 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             request.receiver,
         )
         try:
-            # Assume the sender is passed in the request metadata.
             metadata = dict(context.invocation_metadata())
             sender = metadata.get("sender", "unknown_sender")
 
@@ -114,11 +114,9 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                     timestamp="",
                 )
 
-            # Insert the message into the database.
             message_id = insert_message(sender, request.message, request.receiver)
-            logging.info(f"Message inserted with ID: {message_id}")
+            logging.info("Message inserted with ID: %d", message_id)
 
-            # Prepare a ReceivedMessage payload using a dict and unpack it.
             received_msg = protocols_pb2.ReceivedMessage(
                 **{
                     "message": request.message,
@@ -130,18 +128,19 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 }
             )
 
-            # Check if the receiver is online.
             with online_users_lock:
+                logging.info("ONLINE USERS: %s", online_users)
                 receiver_entry = online_users.get(request.receiver)
 
             if receiver_entry:
                 enqueue_message(request.receiver, received_msg)
                 logging.info(
-                    f"Message enqueued for online receiver '{request.receiver}'."
+                    "Message enqueued for online receiver '%s'.", request.receiver
                 )
             else:
                 logging.info(
-                    f"User '{request.receiver}' is offline. Message stored for later delivery."
+                    "User '%s' is offline. Message stored for later delivery.",
+                    request.receiver,
                 )
 
             response_payload = {
@@ -157,7 +156,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 timestamp=response_payload["timestamp"],
             )
         except Exception as e:
-            logging.error(f"Error in SendMessage: {e}")
+            logging.error("Error in SendMessage: %s", e)
             context.set_details("Internal server error")
             context.set_code(grpc.StatusCode.INTERNAL)
             return protocols_pb2.ConfirmSendMessageResponse(
@@ -167,10 +166,6 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             )
 
     def GetRecentMessages(self, request, context):
-        """
-        Retrieves recent messages for the given user.
-        Uses get_recent_messages(user_id, limit) from the database.
-        """
         username = request.username
         try:
             recent_tuples = get_recent_messages(username, limit=50)
@@ -181,7 +176,6 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             return protocols_pb2.RecentMessagesResponse(messages=[], status="error")
 
         chat_messages = []
-        # Each tuple is (sender, content, receiver, timestamp, id)
         for tup in recent_tuples:
             sender, content, receiver, timestamp, msg_id = tup
             chat_msg = protocols_pb2.ChatMessage(
@@ -199,13 +193,9 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
         )
 
     def GetUnreadMessages(self, request, context):
-        """
-        Retrieves unread (undelivered) messages for the given user.
-        Uses get_undelivered_messages(user_id) from the database.
-        """
         username = request.username
         try:
-            unread_tuples = get_undelivered_messages(username)
+            unread_tuples = get_unread_messages(username)
         except Exception as e:
             logging.error("Error fetching unread messages for %s: %s", username, e)
             context.set_details("Error fetching unread messages")
@@ -213,7 +203,6 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             return protocols_pb2.UnreadMessagesResponse(messages=[], status="error")
 
         chat_messages = []
-        # Each tuple is (sender, content, timestamp, id)
         for tup in unread_tuples:
             sender, content, timestamp, msg_id = tup
             chat_msg = protocols_pb2.ChatMessage(
@@ -230,6 +219,26 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             messages=chat_messages, status="success"
         )
 
+    def MarkAsRead(self, request, context):
+        """
+        Marks the messages with the provided message_ids as read.
+        """
+        try:
+            # request.message_ids is a repeated field of int32
+            mark_messages_as_read(request.message_ids)
+            return protocols_pb2.ConfirmMarkAsReadResponse(
+                message="Messages marked as read.",
+                status="success",
+            )
+        except Exception as e:
+            logging.error("Error in MarkAsRead: %s", e)
+            context.set_details("Internal server error while marking messages as read")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.ConfirmMarkAsReadResponse(
+                message="Internal server error",
+                status="error",
+            )
+
     def DeleteMessage(self, request, context):
         """
         Handles deletion of a message.
@@ -240,14 +249,27 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             request.username,
             request.message_id,
         )
-        success = delete_message(request.message_id)
-        if success:
+        try:
+            success = delete_message(request.message_id)
+            if success:
+                return protocols_pb2.SuccessResponse(
+                    message="Message deleted successfully.",
+                    status="success",
+                )
+            else:
+                context.set_details("Failed to delete message.")
+                context.set_code(grpc.StatusCode.INTERNAL)
+                return protocols_pb2.SuccessResponse(
+                    message="Failed to delete message.",
+                    status="error",
+                )
+        except Exception as e:
+            logging.error("Error in DeleteMessage: %s", e)
+            context.set_details("Internal server error during message deletion")
+            context.set_code(grpc.StatusCode.INTERNAL)
             return protocols_pb2.SuccessResponse(
-                message="Message deleted", status="success"
-            )
-        else:
-            return protocols_pb2.SuccessResponse(
-                message="Failed to delete message", status="error"
+                message="Internal server error",
+                status="error",
             )
 
     def DeleteAccount(self, request, context):
@@ -256,14 +278,30 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
         Expects a DeleteAccountRequest with field 'username'.
         """
         logging.info("DeleteAccount called for user: %s", request.username)
-        success = delete_account(request.username)
-        if success:
+        try:
+            success = delete_account(request.username)
+            if success:
+                with online_users_lock:
+                    if request.username in online_users:
+                        del online_users[request.username]
+                return protocols_pb2.SuccessResponse(
+                    message="Account deleted successfully.",
+                    status="success",
+                )
+            else:
+                context.set_details("Failed to delete account.")
+                context.set_code(grpc.StatusCode.INTERNAL)
+                return protocols_pb2.SuccessResponse(
+                    message="Failed to delete account.",
+                    status="error",
+                )
+        except Exception as e:
+            logging.error("Error in DeleteAccount: %s", e)
+            context.set_details("Internal server error during account deletion")
+            context.set_code(grpc.StatusCode.INTERNAL)
             return protocols_pb2.SuccessResponse(
-                message="Account deleted", status="success"
-            )
-        else:
-            return protocols_pb2.SuccessResponse(
-                message="Failed to delete account", status="error"
+                message="Internal server error",
+                status="error",
             )
 
 

@@ -5,6 +5,49 @@ import grpc
 # Import the generated gRPC modules
 import protocols_pb2
 import protocols_pb2_grpc
+import grpc
+import logging
+
+
+class SizeLoggingClientInterceptor(
+    grpc.UnaryUnaryClientInterceptor,
+    grpc.UnaryStreamClientInterceptor,
+    grpc.StreamUnaryClientInterceptor,
+    grpc.StreamStreamClientInterceptor,
+):
+    def intercept_unary_unary(self, continuation, client_call_details, request):
+        # Serialize the request to get its size.
+        data = request.SerializeToString()
+        size = len(data)
+        logging.info(f"Sending unary_unary request of size: {size} bytes")
+        response = continuation(client_call_details, request)
+        return response
+
+    def intercept_unary_stream(self, continuation, client_call_details, request):
+        data = request.SerializeToString()
+        size = len(data)
+        logging.info(f"Sending unary_stream request of size: {size} bytes")
+        response_it = continuation(client_call_details, request)
+        return response_it
+
+    def intercept_stream_unary(
+        self, continuation, client_call_details, request_iterator
+    ):
+        # For stream requests, sum the sizes of all messages.
+        total = 0
+        for req in request_iterator:
+            total += len(req.SerializeToString())
+        logging.info(f"Sending stream_unary request total size: {total} bytes")
+        return continuation(client_call_details, request_iterator)
+
+    def intercept_stream_stream(
+        self, continuation, client_call_details, request_iterator
+    ):
+        total = 0
+        for req in request_iterator:
+            total += len(req.SerializeToString())
+        logging.info(f"Sending stream_stream request total size: {total} bytes")
+        return continuation(client_call_details, request_iterator)
 
 
 class GRPCClient:
@@ -12,7 +55,7 @@ class GRPCClient:
     A simple gRPC client to interact with the MessagingService.
     """
 
-    def __init__(self, host="localhost", port=50051):
+    def __init__(self, host="localhost", port=50051, intercept=True):
         """
         Initializes the gRPC client.
 
@@ -20,7 +63,14 @@ class GRPCClient:
             host (str): The hostname of the gRPC server.
             port (int): The port number of the gRPC server.
         """
-        self.channel = grpc.insecure_channel(f"{host}:{port}")
+        if intercept:
+            interceptors = [SizeLoggingClientInterceptor()]
+        else:
+            interceptors = []
+
+        self.channel = grpc.intercept_channel(
+            grpc.insecure_channel(f"{host}:{port}"), *interceptors
+        )
         self.stub = protocols_pb2_grpc.MessagingServiceStub(self.channel)
 
     def login(self, username: str, password: str):

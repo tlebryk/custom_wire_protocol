@@ -17,8 +17,7 @@ This repository contains a basic TCP server, a graphical client interface, and p
 ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows use: venv\Scripts\activate
-   pip install pytest 
-
+   pip install -r requirements.txt
 ```
 
 ### File Structure
@@ -47,7 +46,10 @@ python src/server.py
 
 ```
 
-The server will be listening on `0.0.0.0:8000` for incoming connections.
+The server will be listening on `0.0.0.0:8000` for incoming connections by default.
+
+You can add additional command line flags to specify the address/port and whether to measure packet size. See server.py for more information. 
+
 
 ### Launching the Frontend
 
@@ -58,48 +60,18 @@ python src/frontend.py
 
 ```
 
-The frontend uses Tkinter to provide a GUI for chat registration, login, and message handling. It connects to the backend server for real-time communication.
+The frontend uses Tkinter to provide a GUI for chat registration, login, and message handling. It connects to the backend server for real-time communication. 
+The client by default looks for a server on `0.0.0.0:8000`, but you can specify the host, port and whether to track package size using command line flags. For instance: 
+
+
 
 ## Testing 
 To test this code, run pytest from the src directory.
 
 Example command: 
-`python -m pytest tests/ -s -vv `
+`python -m pytest tests/ -s -vv --cov=./`
 
 Optionally, you can specify where your config file is by prefixing your pytest command with `PROTOCOL_FILE="./configs/protocol.json" pytest ...`, but the default location is `src/configs/protocol.json`. This is helpful if you need to run the tests from the root directory or elsewhere in the project. 
-
-### Protocol Modes
-
-The project supports two modes for testing protocols:
-
-#### JSON Mode
-
-Set the environment variable to `json` to run using JSON:
-
-```bash
-export MODE='json'
-
-```
-
-#### Custom Protocol Mode
-
-Set the environment variable to `custom` to run using the custom protocol:
-
-```bash
-export MODE='custom'
-
-```
-
-_If the `MODE` variable is not specified, the frontend will try to determine it from the system’s environment variables and default to JSON._
-
-Performance varies based on the message being sent, but we found a 29% reduction in size of data transfered over the wire using the custom protocol compared to json with the following simple packet: 
-```json
-{
-   "action": "login",
-   "username": "a",
-   "password": "a"
-}
-```
 
 ## Running on Multiple Devices
 
@@ -111,9 +83,6 @@ You can run the application on multiple machines. Follow these steps:
 -   All computers should be on the **same Wi-Fi** or **LAN network**.
 -   If connecting over the **internet**, ensure that port forwarding is configured.
 
-### 1. Start the Server
-
-Choose one computer to act as the **server**. This computer will run the WebSocket server and handle multiple client connections.
 
 #### Step 1: Find the Server’s Local IP Address
 
@@ -136,35 +105,25 @@ On the **server computer**, open **Command Prompt (Windows)** or **Terminal (Mac
     ```
     
 
-#### Step 2: Update `server.py` with the Server’s IP
+#### Step 2: Run `server.py` with the Server’s IP
 
-Modify your HOST environment variable with your IP address. 
-
-```bash
-export HOST='172.11.11.1'
-```
-
-### 2. Connect Clients from Other Computers
-
-Each client computer must connect to the server using its **local IP address**.
-
-#### Step 1: Update `client.py` with the Server’s IP
-
-On each **client computer**, modify the connection setup in `client.py` to connect to the server's IP:
+Run server specifying your address. Technically, this behavior should be enabled by default but specifying the IP address and port explicitly makes it clear. 
 
 ```bash
-export HOST='172.11.11.1'
+python src/server.py --host 172.11.11.1 --port 50051 --intercept
 ```
-#### Step 2: Run the Client
+
+
+
+#### Step 3: Run `client.py` with the Server’s IP specified
 
 On each **client computer**, run:
 
-```bash
-python client.py
-
+```bash 
+python src/frontend.py --host 172.11.11.1 --port 50051 --intercept
 ```
-_Note: The server computer can also act as a client, and multiple clients can connect to the same server concurrently._
+Where 172.11.11.1 is the server's IP address. 
 
 ## Engineering notebook: 
 
-https://docs.google.com/document/d/1JtPzRj3rhguNx7oXOzPTn3823a7jsuBHUxpW0L8DIa0/edit?usp=sharing
+https://docs.google.com/document/d/1uck1DvlR-E-yDYn41MySBpTcRAgNvV6-UusJmBGb9u4/edit?usp=sharing

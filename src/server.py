@@ -5,7 +5,7 @@ import logging
 import threading
 import time
 from datetime import datetime
-
+from server_intercepter import SizeLoggingServerInterceptor
 from users import authenticate_user, register_user, delete_account
 from database import (
     get_all_users_except,
@@ -21,6 +21,7 @@ from database import (
 
 import protocols_pb2
 import protocols_pb2_grpc
+import argparse
 
 logging.basicConfig(level=logging.INFO)
 
@@ -176,7 +177,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
             with online_users_lock:
                 logging.info("ONLINE USERS: %s", online_users)
-                receiver_entry = online_users.get(request.receiver)
+            receiver_entry = online_users.get(request.receiver)
 
             if receiver_entry:
                 enqueue_message(request.receiver, received_msg)
@@ -521,8 +522,14 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             )
 
 
-def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+def serve(host=None, port=None, intercept=None):
+    if intercept:
+        intercepter = SizeLoggingServerInterceptor()
+
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=10),
+        interceptors=[intercepter] if intercept else [],
+    )
     protocols_pb2_grpc.add_MessagingServiceServicer_to_server(
         MessagingServiceServicer(), server
     )
@@ -533,4 +540,23 @@ def serve():
 
 
 if __name__ == "__main__":
-    serve()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="localhost",
+        help="The hostname of the gRPC server.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=50051,
+        help="The port number of the gRPC server.",
+    )
+    parser.add_argument(
+        "--intercept",
+        action="store_true",
+        help="Whether to enable interceptors for gRPC requests.",
+    )
+    args = parser.parse_args()
+    serve(**vars(args))

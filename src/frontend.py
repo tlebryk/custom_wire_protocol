@@ -5,6 +5,7 @@ import logging
 import threading
 import os
 import datetime
+import argparse
 
 # Import the generated gRPC modules
 
@@ -22,7 +23,7 @@ class ChatApp(tk.Tk):
     A GUI-based chat application using gRPC for messaging.
     """
 
-    def __init__(self, mode: str = None):
+    def __init__(self, **grpc_client_kwargs):
         """
         Initializes the ChatApp GUI and its components.
 
@@ -35,7 +36,7 @@ class ChatApp(tk.Tk):
         self.resizable(False, False)
 
         # Initialize gRPC client
-        self.grpc_client = GRPCClient()
+        self.grpc_client = GRPCClient(**grpc_client_kwargs)
         # We'll set the client's username after login.
         self.grpc_client.username = ""
 
@@ -49,7 +50,7 @@ class ChatApp(tk.Tk):
         self.messages_container = MessagesContainer(self)
         self.delete_account_container = DeleteAccountContainer(self)
 
-        self.mode = mode if mode else os.environ.get("MODE", "grpc")
+        # self.mode = mode if mode else os.environ.get("MODE", "grpc")
 
     def start_message_listener(self, username: str):
         """
@@ -810,6 +811,25 @@ class NNewMessages(tk.Frame):
 
 
 if __name__ == "__main__":
-    app = ChatApp()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="localhost",
+        help="The hostname of the gRPC server.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=50051,
+        help="The port number of the gRPC server.",
+    )
+    parser.add_argument(
+        "--intercept",
+        action="store_true",
+        help="Whether to enable interceptors for gRPC requests.",
+    )
+    args = parser.parse_args()
+    app = ChatApp(**vars(args))
     app.protocol("WM_DELETE_WINDOW", app.on_closing)
     app.mainloop()

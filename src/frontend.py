@@ -1,17 +1,16 @@
 # frontend.py
-import sys
 import tkinter as tk
 from tkinter import messagebox
 import logging
-import grpc
 import threading
 import os
 import datetime
+import argparse
 
 # Import the generated gRPC modules
-import protocols_pb2
-import protocols_pb2_grpc
+
 from typing import Dict, Any, Optional, List, Union, Literal
+from client import GRPCClient
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
@@ -19,146 +18,25 @@ logging.basicConfig(
 )
 
 
-class GRPCClient:
-    """
-    A simple gRPC client to interact with the MessagingService.
-    """
-
-    def __init__(self, host="localhost", port=50051):
-        self.channel = grpc.insecure_channel(f"{host}:{port}")
-        self.stub = protocols_pb2_grpc.MessagingServiceStub(self.channel)
-
-    def login(self, username: str, password: str):
-        try:
-            request = protocols_pb2.LoginRequest(username=username, password=password)
-            response = self.stub.Login(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("Login RPC failed: %s", e)
-            return None
-
-    def register(self, username: str, password: str):
-        try:
-            request = protocols_pb2.RegisterRequest(
-                username=username, password=password
-            )
-            response = self.stub.Register(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("Register RPC failed: %s", e)
-            return None
-
-    def send_message(self, message: str, receiver: str):
-        try:
-            request = protocols_pb2.SendMessageRequest(
-                message=message, receiver=receiver
-            )
-            # Pass sender in metadata (if needed, the client can manage that)
-            response = self.stub.SendMessage(
-                request, metadata=(("sender", self.username),)
-            )
-            return response
-        except grpc.RpcError as e:
-            logging.error("SendMessage RPC failed: %s", e)
-            return None
-        
-    def search_users(self, query):
-        request = protocols_pb2.SearchUsersRequest(query=query)
-        response = self.stub.SearchUsers(request)
-        if response.status == "success":
-            return response.usernames
-        else:
-            return []
-
-
-    def get_recent_messages(self, username: str):
-        try:
-            request = protocols_pb2.GetRecentMessagesRequest(username=username)
-            response = self.stub.GetRecentMessages(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("GetRecentMessages RPC failed: %s", e)
-            return None
-
-    def get_unread_messages(self, username: str):
-        try:
-            request = protocols_pb2.GetUnreadMessagesRequest(username=username)
-            response = self.stub.GetUnreadMessages(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("GetUnreadMessages RPC failed: %s", e)
-            return None
-
-    def mark_as_read(self, message_ids: list):
-        try:
-            request = protocols_pb2.MarkAsReadRequest(message_ids=message_ids)
-            response = self.stub.MarkAsRead(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("MarkAsRead RPC failed: %s", e)
-            return None
-
-    def set_n_unread_messages(self, username: str, n: int):
-        try:
-            request = protocols_pb2.SetNUnreadMessagesRequest(
-                username=username, n_unread_messages=n
-            )
-            response = self.stub.SetNUnreadMessages(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("SetNUnreadMessages RPC failed: %s", e)
-            return None
-
-    def delete_message(self, username: str, message_id: int):
-        try:
-            request = protocols_pb2.DeleteMessageRequest(
-                username=username, message_id=message_id
-            )
-            response = self.stub.DeleteMessage(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("DeleteMessage RPC failed: %s", e)
-            return None
-
-    def delete_account(self, username: str):
-        try:
-            request = protocols_pb2.DeleteAccountRequest(username=username)
-            response = self.stub.DeleteAccount(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("DeleteAccount RPC failed: %s", e)
-            return None
-
-    def subscribe(self, username: str):
-        try:
-            request = protocols_pb2.SubscribeRequest(username=username)
-            return self.stub.Subscribe(request)
-        except grpc.RpcError as e:
-            logging.error("Subscribe RPC failed: %s", e)
-            return None
-    def get_users(self, username: str):
-        try:
-            request = protocols_pb2.GetUsersRequest(username=username)
-            response = self.stub.GetUsers(request)
-            if response.status == "success":
-                return list(response.usernames)
-            else:
-                return []
-        except grpc.RpcError as e:
-            logging.error("GetUsers RPC failed: %s", e)
-            return []
-
-
-
 class ChatApp(tk.Tk):
-    def __init__(self, mode: str = None):
+    """
+    A GUI-based chat application using gRPC for messaging.
+    """
+
+    def __init__(self, **grpc_client_kwargs):
+        """
+        Initializes the ChatApp GUI and its components.
+
+        Args:
+            mode (str, optional): The mode of the application (default is determined by environment variable `MODE`).
+        """
         super().__init__()
         self.title("gRPC Chat - Registration and Login")
         self.geometry("800x800")
         self.resizable(True, True)
 
         # Initialize gRPC client
-        self.grpc_client = GRPCClient()
+        self.grpc_client = GRPCClient(**grpc_client_kwargs)
         # We'll set the client's username after login.
         self.grpc_client.username = ""
 
@@ -172,11 +50,12 @@ class ChatApp(tk.Tk):
         self.messages_container = MessagesContainer(self)
         self.delete_account_container = DeleteAccountContainer(self)
 
-        self.mode = mode if mode else os.environ.get("MODE", "grpc")
-
     def start_message_listener(self, username: str):
         """
         Starts a thread that subscribes for incoming messages and updates the UI.
+
+        Args:
+            username (str): The username for subscribing to new messages.
         """
 
         def listen():
@@ -200,6 +79,9 @@ class ChatApp(tk.Tk):
         threading.Thread(target=listen, daemon=True).start()
 
     def get_unread_messages(self):
+        """
+        Retrieves unread messages for the logged-in user and updates the UI.
+        """
         username = self.n_new_messages.username
         if username:
             response = self.grpc_client.get_unread_messages(username)
@@ -213,8 +95,10 @@ class ChatApp(tk.Tk):
                     }
                     self.messages_container.add_unread_message(msg_dict)
 
-
     def get_recent_messages(self):
+        """
+        Retrieves recent messages for the logged-in user and updates the UI.
+        """
         username = self.n_new_messages.username
         if username:
             response = self.grpc_client.get_recent_messages(username)
@@ -229,6 +113,9 @@ class ChatApp(tk.Tk):
                     self.messages_container.add_recent_message(msg_dict)
 
     def switch_to_chat_screen(self):
+        """
+        Switches the UI from the authentication screen to the chat screen.
+        """
         self.auth_box.login_form.pack_forget()
         self.auth_box.register_form.pack_forget()
         self.auth_box.toggle_button.pack_forget()
@@ -238,11 +125,24 @@ class ChatApp(tk.Tk):
         self.messages_container.pack(pady=10)
 
     def on_closing(self):
+        """
+        Handles the closing event of the application window.
+        """
         self.destroy()
 
 
 class AuthBox(tk.Frame):
+    """
+    A frame containing authentication forms for login and registration.
+    """
+
     def __init__(self, parent: tk.Tk) -> None:
+        """
+        Initializes the authentication box with login and registration forms.
+
+        Args:
+            parent (tk.Tk): The parent Tkinter window.
+        """
         super().__init__(parent)
         self.login_form = LoginForm(parent)
         self.register_form = RegisterForm(parent)
@@ -256,6 +156,9 @@ class AuthBox(tk.Frame):
         self.toggle_button.pack(pady=5)
 
     def toggle_forms(self) -> None:
+        """
+        Toggles between the login and registration forms.
+        """
         if self.current_form == "login":
             self.login_form.pack_forget()
             self.register_form.pack(pady=10)
@@ -270,6 +173,13 @@ class AuthBox(tk.Frame):
 
 class RegisterForm(tk.Frame):
     def __init__(self, parent: tk.Tk) -> None:
+        """
+        Initializes the RegisterForm widget.
+
+        Args:
+            parent (tk.Tk): The parent widget of this widget.
+        """
+
         super().__init__(parent)
         tk.Label(self, text="Register", font=("Helvetica", 14)).pack(pady=5)
         tk.Label(self, text="Username:").pack()
@@ -281,6 +191,15 @@ class RegisterForm(tk.Frame):
         tk.Button(self, text="Register", command=self.register).pack(pady=10)
 
     def register(self):
+        """
+        Registers a user with the given username and password.
+
+        Displays a message box based on the server's response to the registration request.
+        If the registration is successful, the message box will show the response message.
+        If the registration fails, the message box will also show the response message.
+        After registration, the username and password entry fields will be cleared.
+        """
+
         username = self.username_entry.get().strip()
         password = self.password_entry.get().strip()
         if not username or not password:
@@ -299,6 +218,22 @@ class RegisterForm(tk.Frame):
 
 class LoginForm(tk.Frame):
     def __init__(self, parent):
+        """
+        Initializes the login form with its UI elements.
+
+        This function packs the elements in the following order from top to bottom:
+
+        1. A label with the text "Login" with a font size of 14.
+        2. A label with the text "Username:".
+        3. An entry field for the username.
+        4. A label with the text "Password:".
+        5. An entry field for the password, with the show parameter set to "*", which
+           means the text will be hidden as the user types.
+        6. A button with the text "Login", which calls the login method when clicked.
+
+        :param parent: The parent widget of this login form.
+        """
+
         super().__init__(parent)
         tk.Label(self, text="Login", font=("Helvetica", 14)).pack(pady=5)
         tk.Label(self, text="Username:").pack()
@@ -310,6 +245,14 @@ class LoginForm(tk.Frame):
         tk.Button(self, text="Login", command=self.login).pack(pady=10)
 
     def login(self) -> None:
+        """
+        Logs in the user with the given username and password.
+
+        Displays a message box based on the server's response to the login request.
+        If the login is successful, the message box will show the response message.
+        If the login fails, the message box will also show the response message.
+        After login, the username and password entry fields will be cleared.
+        """
         username: str = self.username_entry.get().strip()
         password: str = self.password_entry.get().strip()
         if not username or not password:
@@ -339,7 +282,17 @@ class LoginForm(tk.Frame):
 
 
 class ChatBox(tk.Frame):
+    """
+    A frame for sending and managing chat messages.
+    """
+
     def __init__(self, parent):
+        """
+        Initializes the chat box with UI components for messaging.
+
+        Args:
+            parent (tk.Tk): The parent Tkinter window.
+        """
         super().__init__(parent)
         self.username = None
         receiver_frame = tk.Frame(self)
@@ -371,7 +324,9 @@ class ChatBox(tk.Frame):
         tk.Label(search_frame, text="Search for users:").pack(side=tk.LEFT, padx=5)
         self.search_entry = tk.Entry(search_frame, width=10)
         self.search_entry.pack(side=tk.LEFT, padx=5)
-        self.search_button = tk.Button(search_frame, text="Search", command=self.search_users)
+        self.search_button = tk.Button(
+            search_frame, text="Search", command=self.search_users
+        )
         self.search_button.pack(side=tk.LEFT, padx=5)
         self.results_label = tk.Label(self, text="")
         self.results_label.pack()
@@ -392,6 +347,9 @@ class ChatBox(tk.Frame):
         self.results_label.config(text=f"Users found:\n{result_text}")
 
     def send_message(self):
+        """
+        Sends a message to the selected user.
+        """
         receiver = self.selected_user.get()
         message = self.message_text.get().strip()
         if not receiver or receiver == "Select a user":
@@ -408,21 +366,34 @@ class ChatBox(tk.Frame):
         else:
             logging.info(f"Response from send_message: {response}")
         self.message_text.delete(0, tk.END)
-        
+
     def fetch_users(self):
-        # Fetch users using the logged-in user's username
+        """
+        Fetches the list of users from the gRPC server and updates the dropdown.
+        """
         users = self.master.grpc_client.get_users(self.master.grpc_client.username)
         if users:
             self.update_user_list(users)
         else:
             self.update_user_list(["No users available"])
 
-
     def display_error(self, message):
+        """
+        Displays an error message in the UI.
+
+        Args:
+            message (str): The error message to display.
+        """
         self.error_box.config(text=message)
         self.error_box.pack()
 
     def update_user_list(self, users):
+        """
+        Updates the user dropdown with the fetched list of users.
+
+        Args:
+            users (list): A list of usernames.
+        """
         if not users:
             self.selected_user.set("No users available")
             return
@@ -434,8 +405,20 @@ class ChatBox(tk.Frame):
             menu.add_command(
                 label=user, command=lambda value=user: self.selected_user.set(value)
             )
+
+
 class MessagesContainer(tk.Frame):
     def __init__(self, parent):
+        """
+        Initializes a MessagesContainer, which is a scrollable frame containing
+        all messages for a user. The frame is divided into two sections: unread
+        and recent. Each section contains a scrollable canvas with a scrollbar on
+        the right.
+
+        Args:
+            parent: The parent widget of this frame.
+        """
+
         super().__init__(parent)
         self.username = None
         self.unread_messages_dict = {}
@@ -443,6 +426,12 @@ class MessagesContainer(tk.Frame):
         self.create_scrollable_sections()
 
     def create_scrollable_sections(self):
+        """
+        Creates two scrollable sections for displaying unread and recent messages.
+        The two sections are stored as instance variables: unread_messages_frame and
+        recent_messages_frame. The sections are packed into the main MessagesContainer
+        frame, with the unread section on top and the recent section below it.
+        """
         self.configure(width=600)
         unread_section = tk.LabelFrame(
             self, text="Unread Messages", padx=5, pady=5, width=600
@@ -484,6 +473,14 @@ class MessagesContainer(tk.Frame):
         recent_scrollbar.pack(side="right", fill="y")
 
     def mark_all_as_read(self) -> None:
+        """
+        Marks all unread messages for the current user as read. If there are no
+        unread messages, shows an info box with a message saying so. If there are
+        unread messages, calls the gRPC client's mark_as_read method and then
+        moves the messages to the recent messages section. If the marking is
+        successful, shows an info box with a message saying so. If the marking
+        fails, shows an error box with a message saying so.
+        """
         if not self.unread_messages_dict:
             messagebox.showinfo(
                 "No Unread Messages", "There are no unread messages to mark as read."
@@ -518,6 +515,26 @@ class MessagesContainer(tk.Frame):
             messagebox.showerror("Error", "Failed to mark messages as read.")
 
     def add_unread_message(self, message_data: Dict[str, Any]) -> None:
+        """
+        Adds a new unread message to the UI.
+
+        Args:
+            message_data (Dict[str, Any]): A dictionary containing the message data.
+                The dictionary should have the following keys:
+                    id (int): The message ID.
+                    from (str): The sender of the message.
+                    timestamp (str): The timestamp of the message in ISO 8601
+                        format.
+                    message (str): The content of the message.
+
+        If the message data is invalid, logs an error and does nothing.
+        If the message ID is already in the unread messages, logs a message and
+        does nothing.
+        Otherwise, creates a new frame with the message text and adds buttons
+        to mark the message as read and delete the message. The frame is added
+        to the unread messages section and the message ID is added to the
+        unread messages dictionary.
+        """
         msg_id = message_data.get("id")
         sender = message_data.get("from")
         timestamp = message_data.get("timestamp")
@@ -567,6 +584,19 @@ class MessagesContainer(tk.Frame):
         self.unread_messages_dict[msg_id] = msg_frame
 
     def read_message(self, msg_id: int, frame: tk.Frame) -> None:
+        """
+        Marks a message as read and adds it to the recent messages section.
+
+        Args:
+            msg_id (int): The message ID.
+            frame (tk.Frame): The frame of the message in the unread messages section.
+
+        If the message ID is marked as read successfully, extracts the message text from the
+        label in the frame and uses it to create a message data dictionary. The message data
+        dictionary is then added to the recent messages section and the frame is destroyed and
+        removed from the unread messages dictionary. If the message ID is not marked as read
+        successfully, shows an error message box.
+        """
         response = self.master.grpc_client.mark_as_read([msg_id])
         if response:
             # Extract text from the label (assumes format: "From {sender} at {timestamp}: {message}")
@@ -601,6 +631,19 @@ class MessagesContainer(tk.Frame):
             messagebox.showerror("Error", "Failed to mark message as read.")
 
     def add_recent_message(self, message_data: Dict[str, Any]) -> None:
+        """
+        Adds a message to the recent messages section.
+
+        Args:
+            message_data (Dict[str, Any]): A dictionary containing the message data. Must contain the following keys:
+                id (int): The message ID.
+                from (str): The sender of the message.
+                timestamp (str): The timestamp of the message.
+                message (str): The content of the message.
+
+        Returns:
+            None
+        """
         msg_id = message_data.get("id")
         sender = message_data.get("from")
         timestamp = message_data.get("timestamp")
@@ -634,6 +677,18 @@ class MessagesContainer(tk.Frame):
     def delete_message(
         self, msg_id: int, frame: tk.Frame, section: Literal["unread", "recent"]
     ) -> None:
+        """
+        Deletes a message from the UI and the server.
+
+        Args:
+            msg_id (int): The message ID.
+            frame (tk.Frame): The frame to be destroyed.
+            section (str): The section of the message list to update.
+
+        Returns:
+            None
+        """
+
         confirm = messagebox.askyesno(
             "Delete Message", "Are you sure you want to delete this message?"
         )
@@ -655,6 +710,16 @@ class MessagesContainer(tk.Frame):
 
 class DeleteAccountContainer(tk.Frame):
     def __init__(self, parent):
+        """
+        Initializes the DeleteAccountContainer with its UI elements.
+
+        This function packs the elements in the following order from top to bottom:
+
+        1. A label with the text "Account Settings" with a font size of 14.
+        2. A button with the text "Delete Account", which calls the delete_account method when clicked.
+
+        :param parent: The parent widget of this delete account container.
+        """
         super().__init__(parent)
         tk.Label(self, text="Account Settings", font=("Helvetica", 14)).pack(pady=5)
         self.delete_button = tk.Button(
@@ -664,6 +729,16 @@ class DeleteAccountContainer(tk.Frame):
         self.username = None
 
     def delete_account(self):
+        """
+        Deletes the currently logged-in user's account.
+
+        If the user is not logged in, a warning message box will appear.
+        If the user is logged in, a confirmation message box will appear.
+        If the user confirms, the account is deleted and a response message box will appear.
+        If the deletion fails, an error message box will appear.
+
+        :return: None
+        """
         if not self.username:
             messagebox.showwarning("Warning", "No user logged in.")
             return
@@ -679,26 +754,16 @@ class DeleteAccountContainer(tk.Frame):
 
 class NNewMessages(tk.Frame):
     def __init__(self, parent):
-        super().__init__(parent)
-        self.username = ""
-        self.counter = 0
-        # Label showing current new messages count
-        # Entry for user to input a numeric value
-        self.user_input = tk.Entry(self, width=10)
-        self.user_input.pack(pady=5)
-        # Button to set the unread messages count
-        self.set_button = tk.Button(
-            self, text="Set Unread Message Count", command=self.set_unread_messages
-        )
-        self.set_button.pack(pady=5)
+        """
+        Initializes the NNewMessages UI component.
 
-    def update_count(self, count):
-        self.counter = count
-        # self.label.config(text=f"New Messages: {self.counter}")
+        This component consists of a label showing the current unread count, an entry
+        field for the user to input a new unread messages limit, and a button to
+        submit the new limit.
 
-
-class NNewMessages(tk.Frame):
-    def __init__(self, parent):
+        Args:
+            parent: The parent widget of this NNewMessages component.
+        """
         super().__init__(parent)
         self.username = ""
         self.counter = 0
@@ -715,10 +780,27 @@ class NNewMessages(tk.Frame):
         self.set_button.pack(pady=5)
 
     def update_count(self, count):
+        """
+        Updates the count of unread messages and displays it in the label.
+
+        Args:
+            count (int): The new count of unread messages.
+        """
         self.counter = count
         self.label.config(text=f"New Messages: {self.counter}")
 
     def set_unread_messages(self) -> None:
+        """
+        Sets the unread messages count for the current user.
+
+        Retrieves the input from the user input field and calls the gRPC client's
+        set_n_unread_messages method. If the setting is successful, shows an info
+        box with a message saying so. If the setting fails, shows an error box with
+        a message saying so.
+
+        Additionally, if the current number of unread messages exceeds the new limit,
+        removes the oldest messages until the count matches the new limit.
+        """
         number = self.user_input.get().strip()
         if not number.isdigit():
             messagebox.showerror("Input Error", "Please enter a valid number.")
@@ -754,6 +836,25 @@ class NNewMessages(tk.Frame):
 
 
 if __name__ == "__main__":
-    app = ChatApp()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="localhost",
+        help="The hostname of the gRPC server.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=50051,
+        help="The port number of the gRPC server.",
+    )
+    parser.add_argument(
+        "--intercept",
+        action="store_true",
+        help="Whether to enable interceptors for gRPC requests.",
+    )
+    args = parser.parse_args()
+    app = ChatApp(**vars(args))
     app.protocol("WM_DELETE_WINDOW", app.on_closing)
     app.mainloop()

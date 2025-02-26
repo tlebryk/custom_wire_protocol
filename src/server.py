@@ -5,7 +5,7 @@ import logging
 import threading
 import time
 from datetime import datetime
-
+from server_intercepter import SizeLoggingServerInterceptor
 from users import authenticate_user, register_user, delete_account
 from database import (
     get_all_users_except,
@@ -22,6 +22,7 @@ from database import (
 
 import protocols_pb2
 import protocols_pb2_grpc
+import argparse
 
 logging.basicConfig(level=logging.INFO)
 
@@ -40,6 +41,16 @@ def enqueue_message(username, message):
 
 class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
     def Login(self, request, context):
+        """
+        Authenticate a user.
+
+        Args:
+            request: A LoginRequest with the username and password.
+            context: The context of the gRPC request.
+
+        Returns:
+            A ConfirmLoginResponse with a status of "success" if the credentials are valid, or "error" if they are not.
+        """
         logging.info("Login called for user: %s", request.username)
         if authenticate_user(request.username, request.password):
             with online_users_lock:
@@ -58,6 +69,16 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
         
 
     def Register(self, request, context):
+        """
+        Register a new user.
+
+        Args:
+            request: A RegisterRequest with the username and password.
+            context: The context of the gRPC request.
+
+        Returns:
+            A SuccessResponse with a status of "success" if the registration is successful, or "error" if it is not.
+        """
         logging.info("Register called for user: %s", request.username)
         success, msg = register_user(request.username, request.password)
         if success:
@@ -84,6 +105,19 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             return protocols_pb2.SearchUsersResponse(usernames=[], status="error")
 
     def Subscribe(self, request, context):
+        """
+        Subscribe to receive messages for a user.
+
+        Args:
+            request: A SubscribeRequest with the username.
+            context: The context of the gRPC request.
+
+        Yields:
+            ReceivedMessage messages that are sent to the user while they are subscribed.
+
+        Notes:
+            The user is automatically unsubscribed if there is an error in the stream or if the gRPC request is cancelled.
+        """
         logging.info("Subscribe called for user: %s", request.username)
         with online_users_lock:
             online_users[request.username] = (context, [])
@@ -105,6 +139,16 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             logging.info("User %s unsubscribed.", request.username)
 
     def SendMessage(self, request, context):
+        """
+        Send a message to another user.
+
+        Args:
+            request: A SendMessageRequest with the message and receiver username.
+            context: The context of the gRPC request.
+
+        Returns:
+            A ConfirmSendMessageResponse with a status of "success" if the message is sent, or "error" if it is not.
+        """
         logging.info(
             "SendMessage called. Message: %s, Receiver: %s",
             request.message,
@@ -147,7 +191,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
             with online_users_lock:
                 logging.info("ONLINE USERS: %s", online_users)
-                receiver_entry = online_users.get(request.receiver)
+            receiver_entry = online_users.get(request.receiver)
 
             if receiver_entry:
                 enqueue_message(request.receiver, received_msg)
@@ -181,27 +225,45 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 status="error",
                 timestamp="",
             )
-        
+
     def GetUsers(self, request, context):
+        """
+        Get a list of all users except the current user.
+
+        Args:
+            request: A GetUsersRequest with the current user's username.
+            context: The context of the gRPC request.
+
+        Returns:
+            A GetUsersResponse with a status of "success" if the user list is fetched, or "error" if it is not.
+        """
+
         try:
             # get users and exclude the current user from the list
             users = get_all_users_except(request.username)
             return protocols_pb2.GetUsersResponse(
                 usernames=users,
                 status="success",
-                message="User list fetched successfully."
+                message="User list fetched successfully.",
             )
         except Exception as e:
             context.set_details("Error fetching user list")
             context.set_code(grpc.StatusCode.INTERNAL)
             return protocols_pb2.GetUsersResponse(
-                usernames=[],
-                status="error",
-                message=str(e)
+                usernames=[], status="error", message=str(e)
             )
 
-
     def GetRecentMessages(self, request, context):
+        """
+        Get the recent messages for a user.
+
+        Args:
+            request: A GetRecentMessagesRequest with the username.
+            context: The context of the gRPC request.
+
+        Returns:
+            A RecentMessagesResponse with a status of "success" if the messages are fetched, or "error" if they are not.
+        """
         username = request.username
         # get user info
         user_info = get_user_info(username)
@@ -247,6 +309,16 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
         )
 
     def GetUnreadMessages(self, request, context):
+        """
+        Get the unread messages for a user.
+
+        Args:
+            request: A GetUnreadMessagesRequest with the username.
+            context: The context of the gRPC request.
+
+        Returns:
+            An UnreadMessagesResponse with a status of "success" if the messages are fetched, or "error" if they are not.
+        """
         username = request.username
         user_info = get_user_info(username)
         n_message_index = 1
@@ -289,8 +361,16 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
     def MarkAsRead(self, request, context):
         """
-        Marks the messages with the provided message_ids as read.
+        Mark a list of messages as read.
+
+        Args:
+            request: A MarkAsReadRequest with the message IDs to mark as read.
+            context: The context of the gRPC request.
+
+        Returns:
+            A ConfirmMarkAsReadResponse with a status of "success" if the messages are marked as read, or "error" if they are not.
         """
+
         try:
             # request.message_ids is a repeated field of int32
             mark_messages_as_read(request.message_ids)
@@ -309,9 +389,16 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
     def DeleteMessage(self, request, context):
         """
-        Handles deletion of a message.
-        Expects a DeleteMessageRequest with fields 'username' and 'message_id'.
+        Delete a message.
+
+        Args:
+            request: A DeleteMessageRequest with the username and message_id of the message to delete.
+            context: The context of the gRPC request.
+
+        Returns:
+            A SuccessResponse with a status of "success" if the message is deleted, or "error" if it is not.
         """
+
         logging.info(
             "DeleteMessage called for user: %s, message_id: %d",
             request.username,
@@ -342,8 +429,14 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
     def DeleteAccount(self, request, context):
         """
-        Handles deletion of an account.
-        Expects a DeleteAccountRequest with field 'username'.
+        Delete the account of a user.
+
+        Args:
+            request: A DeleteAccountRequest with the username.
+            context: The context of the gRPC request.
+
+        Returns:
+            A SuccessResponse with a status of "success" if the account is deleted, or "error" if it is not.
         """
         logging.info("DeleteAccount called for user: %s", request.username)
         try:
@@ -374,10 +467,22 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
     def SetNUnreadMessages(self, request, context):
         """
-        Handles the request to set the number of unread messages for a user.
-        After updating the count, if the new count is higher than the old,
-        immediately fetch and enqueue additional messages.
+        Set the number of unread messages for a user.
+
+        Args:
+            request: A SetNUnreadMessagesRequest with the username and number of unread messages.
+            context: The context of the gRPC request.
+
+        Returns:
+            A SuccessResponse with a status of "success" if the unread messages count is set, or "error" if it is not.
+
+        Notes:
+            If the user is not found in the database, the unread messages count is set to 50.
+            If the user is found but the unread messages count is not set in the request, an error is returned.
+            If the unread messages count is set, the server will fetch the unread messages from the database and enqueue
+            them for the user.
         """
+
         username = request.username
         n_unread = request.n_unread_messages
 
@@ -402,28 +507,6 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
         # Update the unread messages count in the database.
         success = set_n_unread_messages(username, n_unread)
         if success:
-            # If the new count is greater than the old, and the user is online,
-            # immediately enqueue additional messages.
-            # Attempt to fetch recent messages.
-            # try:
-            #     recent_tuples = get_recent_messages(username, limit=n_unread)
-            #     for tup in recent_tuples:
-            #         # Assume tuple order: (sender, content, receiver, timestamp, msg_id)
-            #         sender, content, receiver, timestamp, msg_id = tup
-            #         received_msg = protocols_pb2.ReceivedMessage(
-            #             **{
-            #                 "message": content,
-            #                 "from": sender,
-            #                 "timestamp": timestamp,
-            #                 "read": "false",
-            #                 "id": msg_id,
-            #                 "username": sender,
-            #             }
-            #         )
-            #         enqueue_message(username, received_msg)
-            # except Exception as e:
-            #     logging.error("Error fetching recent messages: %s", e)
-            # Attempt to fetch unread (undelivered) messages.
             try:
                 unread_tuples = get_unread_messages(username, limit=n_unread)
                 # Assume corrected tuple order: (msg_id, sender, content, timestamp)
@@ -453,8 +536,14 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             )
 
 
-def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+def serve(host=None, port=None, intercept=None):
+    if intercept:
+        intercepter = SizeLoggingServerInterceptor()
+
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=10),
+        interceptors=[intercepter] if intercept else [],
+    )
     protocols_pb2_grpc.add_MessagingServiceServicer_to_server(
         MessagingServiceServicer(), server
     )
@@ -465,4 +554,23 @@ def serve():
 
 
 if __name__ == "__main__":
-    serve()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="localhost",
+        help="The hostname of the gRPC server.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=50051,
+        help="The port number of the gRPC server.",
+    )
+    parser.add_argument(
+        "--intercept",
+        action="store_true",
+        help="Whether to enable interceptors for gRPC requests.",
+    )
+    args = parser.parse_args()
+    serve(**vars(args))

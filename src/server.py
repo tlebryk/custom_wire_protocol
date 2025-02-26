@@ -14,6 +14,7 @@ from database import (
     get_undelivered_messages,
     get_unread_messages,
     delete_message,
+    search_users_in_db,
     set_n_unread_messages,
     get_user_info,
     mark_messages_as_read,  # Newly imported function
@@ -54,6 +55,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 message="Invalid username or password",
                 status="error",
             )
+        
 
     def Register(self, request, context):
         logging.info("Register called for user: %s", request.username)
@@ -68,6 +70,18 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 message=msg,
                 status="error",
             )
+        
+    def SearchUsers(self, request, context):
+        query = request.query
+        try:
+            # Fetch matching users from the database
+            users = search_users_in_db(query)
+            return protocols_pb2.SearchUsersResponse(usernames=users, status="success")
+        except Exception as e:
+            logging.error("Error searching for users: %s", e)
+            context.set_details("Error searching users")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.SearchUsersResponse(usernames=[], status="error")
 
     def Subscribe(self, request, context):
         logging.info("Subscribe called for user: %s", request.username)

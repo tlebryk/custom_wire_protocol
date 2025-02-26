@@ -151,6 +151,16 @@ message GetUsersResponse {
   string message = 3;
 }
 
+message SearchUsersRequest {
+    string query = 1;
+}
+
+message SearchUsersResponse {
+    repeated string usernames = 1;
+    string status = 2;
+    string message = 3;
+}
+
 // ---------- Service Definition ----------
 service MessagingService {
   rpc Login(LoginRequest) returns (ConfirmLoginResponse);
@@ -165,4 +175,6 @@ service MessagingService {
   rpc DeleteAccount(DeleteAccountRequest) returns (SuccessResponse);
   rpc Subscribe(SubscribeRequest) returns (stream ReceivedMessage);
   rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
+  rpc SearchUsers(SearchUsersRequest) returns (SearchUsersResponse);
+
 }

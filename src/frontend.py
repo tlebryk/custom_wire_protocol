@@ -61,6 +61,15 @@ class GRPCClient:
         except grpc.RpcError as e:
             logging.error("SendMessage RPC failed: %s", e)
             return None
+        
+    def search_users(self, query):
+        request = protocols_pb2.SearchUsersRequest(query=query)
+        response = self.stub.SearchUsers(request)
+        if response.status == "success":
+            return response.usernames
+        else:
+            return []
+
 
     def get_recent_messages(self, username: str):
         try:
@@ -356,6 +365,31 @@ class ChatBox(tk.Frame):
         self.error_box = tk.Label(self, text="", fg="red")
         self.error_box.pack(pady=5)
         self.error_box.pack_forget()
+
+        search_frame = tk.Frame(self)
+        search_frame.pack(pady=10)
+        tk.Label(search_frame, text="Search for users:").pack(side=tk.LEFT, padx=5)
+        self.search_entry = tk.Entry(search_frame, width=30)
+        self.search_entry.pack(side=tk.LEFT, padx=5)
+        self.search_button = tk.Button(search_frame, text="Search", command=self.search_users)
+        self.search_button.pack(side=tk.LEFT, padx=5)
+        self.results_label = tk.Label(self, text="")
+        self.results_label.pack()
+
+    def search_users(self):
+        query = self.search_entry.get().strip()
+        if query:
+            users = self.master.grpc_client.search_users(query)
+            if users:
+                self.display_results(users)
+            else:
+                self.results_label.config(text="No users found")
+        else:
+            self.results_label.config(text="Please enter a search query.")
+
+    def display_results(self, users):
+        result_text = "\n".join(users)
+        self.results_label.config(text=f"Users found:\n{result_text}")
 
     def send_message(self):
         receiver = self.selected_user.get()

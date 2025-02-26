@@ -646,6 +646,28 @@ class NNewMessages(tk.Frame):
         self.counter = count
         # self.label.config(text=f"New Messages: {self.counter}")
 
+
+class NNewMessages(tk.Frame):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.username = ""
+        self.counter = 0
+        # Label showing the current unread count
+        self.label = tk.Label(self, text="New Messages: 0", font=("Helvetica", 14))
+        self.label.pack(pady=5)
+        # Entry for the new unread messages limit
+        self.user_input = tk.Entry(self, width=10)
+        self.user_input.pack(pady=5)
+        # Button to submit the new limit
+        self.set_button = tk.Button(
+            self, text="Set Unread Message Count", command=self.set_unread_messages
+        )
+        self.set_button.pack(pady=5)
+
+    def update_count(self, count):
+        self.counter = count
+        self.label.config(text=f"New Messages: {self.counter}")
+
     def set_unread_messages(self) -> None:
         number = self.user_input.get().strip()
         if not number.isdigit():
@@ -662,6 +684,19 @@ class NNewMessages(tk.Frame):
                 "Set Unread Messages",
                 f"Set to display {n_unread_messages} unread messages.",
             )
+            # Now check if the current number of unread messages exceeds the new limit.
+            unread_dict = self.master.messages_container.unread_messages_dict
+            current_count = len(unread_dict)
+            if current_count > n_unread_messages:
+                # Remove the oldest messages until the count matches the new limit.
+                # Assuming dictionary insertion order is preserved (Python 3.7+)
+                keys_to_remove = list(unread_dict.keys())[
+                    : current_count - n_unread_messages
+                ]
+                for key in keys_to_remove:
+                    frame = unread_dict[key]
+                    frame.destroy()  # Remove the UI element
+                    del unread_dict[key]
         else:
             messagebox.showerror(
                 "Set Unread Messages", "Failed to set unread message count."

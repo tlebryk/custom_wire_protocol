@@ -177,7 +177,14 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
         chat_messages = []
         for tup in recent_tuples:
-            sender, content, receiver, timestamp, msg_id = tup
+            # sender, content, receiver, timestamp, msg_id = tup
+            (
+                sender,
+                content,
+                receiver,
+                timestamp,
+                msg_id,
+            ) = tup
             chat_msg = protocols_pb2.ChatMessage(
                 **{
                     "message": content,
@@ -204,7 +211,11 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
         chat_messages = []
         for tup in unread_tuples:
-            sender, content, timestamp, msg_id = tup
+            msg_id, sender, content, timestamp = tup
+            print(
+                f"sender: {sender}, content: {content}, timestamp: {timestamp}, msg_id: {msg_id}"
+            )
+            print("types: ", type(sender), type(content), type(timestamp), type(msg_id))
             chat_msg = protocols_pb2.ChatMessage(
                 **{
                     "message": content,

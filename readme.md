@@ -17,8 +17,7 @@ This repository contains a basic TCP server, a graphical client interface, and p
 ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows use: venv\Scripts\activate
-   pip install pytest 
-
+   pip install -r requirements.txt
 ```
 
 ### File Structure

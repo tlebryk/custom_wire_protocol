@@ -155,7 +155,7 @@ class ChatApp(tk.Tk):
         super().__init__()
         self.title("gRPC Chat - Registration and Login")
         self.geometry("800x800")
-        self.resizable(False, False)
+        self.resizable(True, True)
 
         # Initialize gRPC client
         self.grpc_client = GRPCClient()
@@ -367,9 +367,9 @@ class ChatBox(tk.Frame):
         self.error_box.pack_forget()
 
         search_frame = tk.Frame(self)
-        search_frame.pack(pady=10)
+        search_frame.pack(pady=5)
         tk.Label(search_frame, text="Search for users:").pack(side=tk.LEFT, padx=5)
-        self.search_entry = tk.Entry(search_frame, width=30)
+        self.search_entry = tk.Entry(search_frame, width=10)
         self.search_entry.pack(side=tk.LEFT, padx=5)
         self.search_button = tk.Button(search_frame, text="Search", command=self.search_users)
         self.search_button.pack(side=tk.LEFT, padx=5)

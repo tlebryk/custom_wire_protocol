@@ -126,4 +126,4 @@ Where 172.11.11.1 is the server's IP address.
 
 ## Engineering notebook: 
 
-https://docs.google.com/document/d/1JtPzRj3rhguNx7oXOzPTn3823a7jsuBHUxpW0L8DIa0/edit?usp=sharing
+https://docs.google.com/document/d/1uck1DvlR-E-yDYn41MySBpTcRAgNvV6-UusJmBGb9u4/edit?usp=sharing

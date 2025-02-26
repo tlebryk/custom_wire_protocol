@@ -127,6 +127,18 @@ class GRPCClient:
         except grpc.RpcError as e:
             logging.error("Subscribe RPC failed: %s", e)
             return None
+    def get_users(self, username: str):
+        try:
+            request = protocols_pb2.GetUsersRequest(username=username)
+            response = self.stub.GetUsers(request)
+            if response.status == "success":
+                return list(response.usernames)
+            else:
+                return []
+        except grpc.RpcError as e:
+            logging.error("GetUsers RPC failed: %s", e)
+            return []
+
 
 
 class ChatApp(tk.Tk):
@@ -191,6 +203,7 @@ class ChatApp(tk.Tk):
                         "id": msg.id,
                     }
                     self.messages_container.add_unread_message(msg_dict)
+
 
     def get_recent_messages(self):
         username = self.n_new_messages.username
@@ -361,6 +374,15 @@ class ChatBox(tk.Frame):
         else:
             logging.info(f"Response from send_message: {response}")
         self.message_text.delete(0, tk.END)
+        
+    def fetch_users(self):
+        # Fetch users using the logged-in user's username
+        users = self.master.grpc_client.get_users(self.master.grpc_client.username)
+        if users:
+            self.update_user_list(users)
+        else:
+            self.update_user_list(["No users available"])
+
 
     def display_error(self, message):
         self.error_box.config(text=message)
@@ -378,12 +400,6 @@ class ChatBox(tk.Frame):
             menu.add_command(
                 label=user, command=lambda value=user: self.selected_user.set(value)
             )
-
-    def fetch_users(self):
-        dummy_users = ["a", "aaa", "ab"]
-        self.update_user_list(dummy_users)
-
-
 class MessagesContainer(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)

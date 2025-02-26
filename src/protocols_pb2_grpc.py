@@ -90,6 +90,11 @@ class MessagingServiceStub(object):
                 request_serializer=protocols__pb2.SubscribeRequest.SerializeToString,
                 response_deserializer=protocols__pb2.ReceivedMessage.FromString,
                 _registered_method=True)
+        self.GetUsers = channel.unary_unary(
+                '/messaging.MessagingService/GetUsers',
+                request_serializer=protocols__pb2.GetUsersRequest.SerializeToString,
+                response_deserializer=protocols__pb2.GetUsersResponse.FromString,
+                _registered_method=True)
 
 
 class MessagingServiceServicer(object):
@@ -162,6 +167,12 @@ class MessagingServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetUsers(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_MessagingServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -219,6 +230,11 @@ def add_MessagingServiceServicer_to_server(servicer, server):
                     servicer.Subscribe,
                     request_deserializer=protocols__pb2.SubscribeRequest.FromString,
                     response_serializer=protocols__pb2.ReceivedMessage.SerializeToString,
+            ),
+            'GetUsers': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetUsers,
+                    request_deserializer=protocols__pb2.GetUsersRequest.FromString,
+                    response_serializer=protocols__pb2.GetUsersResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -519,6 +535,33 @@ class MessagingService(object):
             '/messaging.MessagingService/Subscribe',
             protocols__pb2.SubscribeRequest.SerializeToString,
             protocols__pb2.ReceivedMessage.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetUsers(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/messaging.MessagingService/GetUsers',
+            protocols__pb2.GetUsersRequest.SerializeToString,
+            protocols__pb2.GetUsersResponse.FromString,
             options,
             channel_credentials,
             insecure,

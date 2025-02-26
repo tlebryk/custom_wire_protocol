@@ -8,6 +8,7 @@ from datetime import datetime
 
 from users import authenticate_user, register_user, delete_account
 from database import (
+    get_all_users_except,
     insert_message,
     get_recent_messages,
     get_undelivered_messages,
@@ -164,6 +165,25 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 status="error",
                 timestamp="",
             )
+        
+    def GetUsers(self, request, context):
+        try:
+            # get users and exclude the current user from the list
+            users = get_all_users_except(request.username)
+            return protocols_pb2.GetUsersResponse(
+                usernames=users,
+                status="success",
+                message="User list fetched successfully."
+            )
+        except Exception as e:
+            context.set_details("Error fetching user list")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.GetUsersResponse(
+                usernames=[],
+                status="error",
+                message=str(e)
+            )
+
 
     def GetRecentMessages(self, request, context):
         username = request.username

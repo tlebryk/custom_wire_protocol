@@ -140,6 +140,17 @@ message GetUnreadMessagesRequest {
   string username = 1;
 }
 
+
+message GetUsersRequest {
+  string username = 1; 
+}
+
+message GetUsersResponse {
+  repeated string usernames = 1;
+  string status = 2;
+  string message = 3;
+}
+
 // ---------- Service Definition ----------
 service MessagingService {
   rpc Login(LoginRequest) returns (ConfirmLoginResponse);
@@ -153,4 +164,5 @@ service MessagingService {
   rpc DeleteMessage(DeleteMessageRequest) returns (SuccessResponse);
   rpc DeleteAccount(DeleteAccountRequest) returns (SuccessResponse);
   rpc Subscribe(SubscribeRequest) returns (stream ReceivedMessage);
+  rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
 }

@@ -1,367 +1,184 @@
 import pytest
-from unittest.mock import Mock, patch, call
-import socket
-import json
-from client import WebSocketClient
-from utils import WebSocketUtil
+from unittest.mock import MagicMock
+from client import GRPCClient
+import protocols_pb2
+import protocols_pb2_grpc
 
 
 @pytest.fixture
-def mock_socket():
-    with patch("socket.socket") as mock:
-        socket_instance = Mock()
-        mock.return_value = socket_instance
-        socket_instance.__bool__ = lambda self: True
-        yield socket_instance
+def client():
+    # Create a GRPCClient instance and replace its stub with a MagicMock.
+    c = GRPCClient(host="localhost", port=50051)
+    c.stub = MagicMock()
+    # Set a dummy username for methods that rely on self.username.
+    c.username = "testuser"
+    return c
 
 
-@pytest.fixture
-def mock_websocket_util():
-    with patch("client.WebSocketUtil") as mock:
-        websocket_instance = Mock()
-        mock.return_value = websocket_instance
-        yield websocket_instance
-
-
-@pytest.fixture
-def client(mock_socket, mock_websocket_util):
-    return WebSocketClient(host="test_host", port=8000, mode="json")
-
-
-@pytest.fixture
-def mock_custom_protocol():
-    with patch("custom_protocol.load_protocols") as mock_load, patch(
-        "custom_protocol.Encoder"
-    ) as mock_encoder, patch("custom_protocol.Decoder") as mock_decoder:
-
-        mock_load.return_value = {
-            "login": {"username": "string", "password": "string"},
-            "register": {"username": "string", "password": "string"},
-            "message": {"content": "string", "recipient": "string"},
-        }
-
-        encoder_instance = Mock()
-        decoder_instance = Mock()
-        mock_encoder.return_value = encoder_instance
-        mock_decoder.return_value = decoder_instance
-
-        yield {
-            "load": mock_load,
-            "encoder": encoder_instance,
-            "decoder": decoder_instance,
-        }
-
-
-@pytest.fixture
-def json_client(mock_socket, mock_websocket_util):
-    return WebSocketClient(host="test_host", port=8000, mode="json")
-
-
-@pytest.fixture
-def custom_client(mock_socket, mock_websocket_util, mock_custom_protocol):
-    return WebSocketClient(host="test_host", port=8000, mode="custom")
-
-
-class TestWebSocketClient:
-    def test_init(self):
-        client = WebSocketClient(host="test_host", port=9000, mode="json")
-        assert client.host == "test_host"
-        assert client.port == 9000
-        assert client.socket is None
-        assert isinstance(
-            client.websocket, WebSocketUtil
-        )  # Because we're using the mock fixture
-
-    def test_successful_connect(self, client, mock_socket):
-        # Mock successful handshake response
-        mock_socket.recv.return_value = (
-            "HTTP/1.1 101 Switching Protocols\r\n"
-            "Upgrade: websocket\r\n"
-            "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n"
-            "\r\n"
-        ).encode()
-
-        result = client.connect()
-
-        assert result is True
-        mock_socket.connect.assert_called_once_with(("test_host", 8000))
-        assert mock_socket.send.called
-
-        # Verify handshake request format
-        sent_data = mock_socket.send.call_args[0][0].decode()
-        assert "GET / HTTP/1.1" in sent_data
-        assert "Upgrade: websocket" in sent_data
-        assert "Connection: Upgrade" in sent_data
-        assert "Sec-WebSocket-Key:" in sent_data
-        assert "Sec-WebSocket-Version: 13" in sent_data
-
-    def test_failed_connect_wrong_response(self, client, mock_socket):
-        # Mock failed handshake response
-        mock_socket.recv.return_value = ("HTTP/1.1 400 Bad Request\r\n" "\r\n").encode()
-
-        result = client.connect()
-
-        assert result is False
-        mock_socket.connect.assert_called_once_with(("test_host", 8000))
-
-    def test_failed_connect_socket_error(self, client, mock_socket):
-        # Mock socket connection error
-        mock_socket.connect.side_effect = socket.error("Connection refused")
-
-        result = client.connect()
-
-        assert result is False
-        mock_socket.connect.assert_called_once_with(("test_host", 8000))
-
-    def test_send_dict_message(self, client, mock_websocket_util):
-        message = {"action": "test", "data": "hello"}
-        client.send(message)
-
-        mock_websocket_util.send_ws_frame.assert_called_once_with(
-            client.socket, message
-        )
-
-    def test_send_string_message(self, client, mock_websocket_util):
-        message = "hello"
-        client.send(message)
-
-        mock_websocket_util.send_ws_frame.assert_called_once_with(
-            client.socket, {"message": message}
-        )
-
-    def test_receive(self, client, mock_websocket_util):
-        expected_response = {"status": "success", "data": "test"}
-        mock_websocket_util.read_ws_frame.return_value = expected_response
-
-        response = client.receive()
-
-        assert response == expected_response
-        mock_websocket_util.read_ws_frame.assert_called_once_with(client.socket)
-
-    def test_close(self, client, mock_socket):
-        client.socket = mock_socket
-        client.close()
-        mock_socket.close.assert_called_once()
-
-    def test_full_message_flow(self, client, mock_socket, mock_websocket_util):
-        # Setup mock responses
-        mock_socket.recv.return_value = (
-            "HTTP/1.1 101 Switching Protocols\r\n"
-            "Upgrade: websocket\r\n"
-            "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n"
-            "\r\n"
-        ).encode()
-
-        mock_websocket_util.read_ws_frame.return_value = {
-            "status": "success",
-            "message": "Registration successful",
-        }
-
-        # Connect
-        assert client.connect() is True
-
-        # Send registration message
-        registration_msg = {
-            "action": "register",
+def test_login_success(client):
+    dummy_response = protocols_pb2.ConfirmLoginResponse(
+        **{
             "username": "testuser",
-            "password": "testpass",
-        }
-        client.send(registration_msg)
-
-        # Verify message was sent correctly
-        mock_websocket_util.send_ws_frame.assert_called_once_with(
-            client.socket, registration_msg
-        )
-
-        # Receive and verify response
-        response = client.receive()
-        assert response["status"] == "success"
-        assert "Registration successful" in response["message"]
-
-    @pytest.mark.parametrize("mode", ["json", "custom"])
-    def test_client_modes(self, mock_socket, mock_websocket_util, mode):
-        client = WebSocketClient(mode=mode)
-        assert client.websocket == mock_websocket_util
-
-        # Verify WebSocketUtil was instantiated with correct mode
-        from client import WebSocketUtil
-
-        WebSocketUtil.assert_called_once_with(mode=mode)
-
-
-class TestWebSocketClientCustomProtocol:
-    def test_init_custom_mode(self, mock_custom_protocol):
-        client = WebSocketClient(mode="custom")
-        assert client.websocket.mode == "custom"
-
-    def test_send_login_message_custom(
-        self, custom_client, mock_websocket_util, mock_custom_protocol
-    ):
-        login_msg = {"action": "login", "username": "testuser", "password": "testpass"}
-
-        # Mock the custom protocol encoder
-        mock_custom_protocol["encoder"].encode_message.return_value = (
-            b"encoded_login_message"
-        )
-
-        custom_client.send(login_msg)
-
-        # Verify the message was encoded using custom protocol
-        mock_websocket_util.send_ws_frame.assert_called_once_with(
-            custom_client.socket, login_msg
-        )
-
-    def test_receive_custom_message(
-        self, custom_client, mock_websocket_util, mock_custom_protocol
-    ):
-        # Mock the custom protocol decoder
-        decoded_msg = {
+            "message": "Logged in successfully",
             "status": "success",
-            "action": "login_response",
-            "message": "Login successful",
         }
-        mock_custom_protocol["decoder"].decode_message.return_value = decoded_msg
-        # In test_receive_custom_message
-        mock_websocket_util.read_ws_frame.return_value = {
-            "status": "success",
-            "action": "login_response",
-            "message": "Login successful",
-        }
-
-        response = custom_client.receive()
-
-        assert response == decoded_msg
-        mock_websocket_util.read_ws_frame.assert_called_once_with(custom_client.socket)
-
-    def test_send_complex_message_custom(
-        self, custom_client, mock_websocket_util, mock_custom_protocol
-    ):
-        message = {
-            "action": "message",
-            "content": "Hello, World!",
-            "recipient": "other_user",
-            "timestamp": "2024-02-12T12:00:00Z",
-        }
-
-        mock_custom_protocol["encoder"].encode_message.return_value = (
-            b"encoded_complex_message"
-        )
-
-        custom_client.send(message)
-
-        mock_websocket_util.send_ws_frame.assert_called_once_with(
-            custom_client.socket, message
-        )
-
-    def test_protocol_error_handling(
-        self, custom_client, mock_websocket_util, mock_custom_protocol
-    ):
-        # Mock protocol encoding error
-        mock_custom_protocol["encoder"].encode_message.side_effect = ValueError(
-            "Invalid message format"
-        )
-
-        # with pytest.raises(ValueError):
-        custom_client.send({"invalid": "message"})
-
-    @pytest.mark.parametrize(
-        "mode,expected_encoding",
-        [("json", "json_encoded"), ("custom", "custom_encoded")],
     )
-    def test_mode_specific_encoding(
-        self,
-        mock_socket,
-        mock_websocket_util,
-        mock_custom_protocol,
-        mode,
-        expected_encoding,
-    ):
-        client = WebSocketClient(mode=mode)
-        test_message = {"action": "test", "data": "hello"}
-
-        if mode == "custom":
-            mock_custom_protocol["encoder"].encode_message.return_value = (
-                b"custom_encoded"
-            )
-
-        client.send(test_message)
-
-        mock_websocket_util.send_ws_frame.assert_called_once_with(
-            client.socket, test_message
-        )
-
-    def test_full_custom_protocol_flow(
-        self, custom_client, mock_socket, mock_websocket_util, mock_custom_protocol
-    ):
-        # Setup mock responses
-        mock_socket.recv.return_value = (
-            "HTTP/1.1 101 Switching Protocols\r\n"
-            "Upgrade: websocket\r\n"
-            "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n"
-            "\r\n"
-        ).encode()
-
-        # Mock custom protocol responses
-        mock_custom_protocol["encoder"].encode_message.return_value = (
-            b"encoded_register_message"
-        )
-        # In test_full_custom_protocol_flow
-        mock_websocket_util.read_ws_frame.return_value = {
-            "status": "success",
-            "action": "register_response",
-            "message": "Registration successful",
-        }
-
-        # Connect
-        assert custom_client.connect() is True
-
-        # Send registration using custom protocol
-        registration_msg = {
-            "action": "register",
-            "username": "testuser",
-            "password": "testpass",
-        }
-        custom_client.send(registration_msg)
-
-        # Verify custom protocol encoding was used
-        mock_websocket_util.send_ws_frame.assert_called_once_with(
-            custom_client.socket, registration_msg
-        )
-
-        # Receive and verify response
-        response = custom_client.receive()
-        assert response["status"] == "success"
-        assert "Registration successful" in response["message"]
+    client.stub.Login.return_value = dummy_response
+    response = client.login("testuser", "password")
+    client.stub.Login.assert_called_once()
+    assert response.username == "testuser"
+    assert response.status == "success"
 
 
-class TestProtocolCompatibility:
-    @pytest.mark.parametrize(
-        "send_mode,receive_mode", [("json", "custom"), ("custom", "json")]
+def test_register_success(client):
+    dummy_response = protocols_pb2.SuccessResponse(
+        **{"message": "Registered successfully", "status": "success"}
     )
-    def test_protocol_mode_mismatch(
-        self,
-        mock_socket,
-        mock_websocket_util,
-        mock_custom_protocol,
-        send_mode,
-        receive_mode,
-    ):
-        # Test sending with one protocol and receiving with another
-        sender = WebSocketClient(mode=send_mode)
-        receiver = WebSocketClient(mode=receive_mode)
+    client.stub.Register.return_value = dummy_response
+    response = client.register("testuser", "password")
+    client.stub.Register.assert_called_once()
+    assert response.status == "success"
 
-        test_message = {"action": "test", "data": "hello"}
 
-        if send_mode == "custom":
-            mock_custom_protocol["encoder"].encode_message.return_value = (
-                b"custom_encoded"
-            )
-        if receive_mode == "custom":
-            mock_custom_protocol["decoder"].decode_message.return_value = test_message
+def test_send_message_success(client):
+    dummy_response = protocols_pb2.ConfirmSendMessageResponse(
+        **{
+            "message": "Hello",
+            "status": "success",
+            "from": "testuser",
+            "timestamp": "2025-01-01T00:00:00Z",
+        }
+    )
+    client.stub.SendMessage.return_value = dummy_response
+    client.username = "testuser"
+    response = client.send_message("Hello", "otheruser")
+    client.stub.SendMessage.assert_called_once()
+    # Verify metadata is passed by checking that the call arguments contain our sender.
+    args, kwargs = client.stub.SendMessage.call_args
+    assert ("sender", "testuser") in kwargs.get("metadata", ())
+    assert response.status == "success"
 
-        # Verify that sending and receiving with different protocols works as expected
-        sender.send(test_message)
-        mock_websocket_util.send_ws_frame.assert_called_once()
+
+def test_get_recent_messages(client):
+    dummy_chat = protocols_pb2.ChatMessage(
+        **{
+            "message": "Recent",
+            "timestamp": "2025-01-01T00:00:00Z",
+            "from": "otheruser",
+            "id": 1,
+        }
+    )
+    dummy_response = protocols_pb2.RecentMessagesResponse(
+        **{"messages": [dummy_chat], "status": "success"}
+    )
+    client.stub.GetRecentMessages.return_value = dummy_response
+    response = client.get_recent_messages("testuser")
+    client.stub.GetRecentMessages.assert_called_once()
+    assert response.status == "success"
+    assert len(response.messages) == 1
+    assert response.messages[0].message == "Recent"
+
+
+def test_get_unread_messages(client):
+    dummy_chat = protocols_pb2.ChatMessage(
+        **{
+            "message": "Unread",
+            "timestamp": "2025-01-01T00:00:00Z",
+            "from": "otheruser",
+            "id": 2,
+        }
+    )
+    dummy_response = protocols_pb2.UnreadMessagesResponse(
+        **{"messages": [dummy_chat], "status": "success"}
+    )
+    client.stub.GetUnreadMessages.return_value = dummy_response
+    response = client.get_unread_messages("testuser")
+    client.stub.GetUnreadMessages.assert_called_once()
+    assert response.status == "success"
+    assert len(response.messages) == 1
+    assert response.messages[0].message == "Unread"
+
+
+def test_mark_as_read(client):
+    dummy_response = protocols_pb2.ConfirmMarkAsReadResponse(
+        **{"message": "Marked as read", "status": "success"}
+    )
+    client.stub.MarkAsRead.return_value = dummy_response
+    response = client.mark_as_read([1, 2, 3])
+    client.stub.MarkAsRead.assert_called_once()
+    assert response.status == "success"
+    assert response.message == "Marked as read"
+
+
+def test_set_n_unread_messages(client):
+    dummy_response = protocols_pb2.SuccessResponse(
+        **{"message": "Set successfully", "status": "success"}
+    )
+    client.stub.SetNUnreadMessages.return_value = dummy_response
+    response = client.set_n_unread_messages("testuser", 10)
+    client.stub.SetNUnreadMessages.assert_called_once()
+    assert response.status == "success"
+    assert response.message == "Set successfully"
+
+
+def test_delete_message(client):
+    dummy_response = protocols_pb2.SuccessResponse(
+        **{"message": "Deleted successfully", "status": "success"}
+    )
+    client.stub.DeleteMessage.return_value = dummy_response
+    response = client.delete_message("testuser", 1)
+    client.stub.DeleteMessage.assert_called_once()
+    assert response.status == "success"
+    assert response.message == "Deleted successfully"
+
+
+def test_delete_account(client):
+    dummy_response = protocols_pb2.SuccessResponse(
+        **{"message": "Account deleted", "status": "success"}
+    )
+    client.stub.DeleteAccount.return_value = dummy_response
+    response = client.delete_account("testuser")
+    client.stub.DeleteAccount.assert_called_once()
+    assert response.status == "success"
+    assert response.message == "Account deleted"
+
+
+def test_subscribe(client):
+    dummy_msg1 = protocols_pb2.ReceivedMessage(
+        **{
+            "from": "otheruser",
+            "message": "Hi",
+            "timestamp": "2025-01-01T00:00:00Z",
+            "read": "false",
+            "id": 1,
+            "username": "otheruser",
+        }
+    )
+    dummy_msg2 = protocols_pb2.ReceivedMessage(
+        **{
+            "from": "otheruser",
+            "message": "How are you?",
+            "timestamp": "2025-01-01T00:01:00Z",
+            "read": "false",
+            "id": 2,
+            "username": "otheruser",
+        }
+    )
+    client.stub.Subscribe.return_value = iter([dummy_msg1, dummy_msg2])
+    subscribe_iter = client.subscribe("testuser")
+    messages = list(subscribe_iter)
+    client.stub.Subscribe.assert_called_once()
+    assert len(messages) == 2
+    assert messages[0].message == "Hi"
+    assert messages[1].message == "How are you?"
+
+
+def test_get_users(client):
+    # Simulate a GetUsers method returning dummy usernames.
+    dummy_response = MagicMock()
+    dummy_response.status = "success"
+    dummy_response.usernames = ["user1", "user2", "user3"]
+    client.stub.GetUsers.return_value = dummy_response
+    users = client.get_users("testuser")
+    client.stub.GetUsers.assert_called_once()
+    assert users == ["user1", "user2", "user3"]

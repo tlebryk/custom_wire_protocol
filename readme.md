@@ -1,18 +1,17 @@
-# Custom Wire Protocol Chat Application
+# gRPC Wire Protocol Chat Application
 
-This repository contains a basic TCP server, a graphical client interface, and protocol testing functionality. Follow the instructions below to set up and run the project.
-
-## Prerequisites
-
-- [Python 3.10](https://www.python.org/downloads/) or higher
-- No additional libraries beyond standard libraries for running the application.
--  To test the application, install pytest (pip install pytest).
+This repository contains a basic server, a graphical client interface, and to create a messaging service using gRPC. 
 
 ## Installation
+
 
 1. **Clone the repository.**
 2. **Navigate to the project root directory.**
 3. **Create and activate a virtual environment (optional but recommended):**
+
+### Prerequisites
+
+- [Python 3.10](https://www.python.org/downloads/) or higher
 
 ```bash
    python -m venv venv
@@ -24,14 +23,13 @@ This repository contains a basic TCP server, a graphical client interface, and p
 
 ```plaintext
 src/
-├── server.py          # Main server ensuring TCP connections for WebSocket communication.
-├── handlers.py        # Routing to process received requests for the server.
-├── users.py           # Extra password & account handling. 
-├── database.py        # Persistent storage for users and messages.
-├── frontend.py        # GUI application using Tkinter; supports chat functionality.
-├── client.py          # Frontend WebSocket client.
-├── utils.py           # Utility functions for sending data over the wire.
-└── custom_protocol.py # Handles encoding & decoding with custom protocol.
+├── server.py               # Main server ensuring TCP connections for WebSocket communication.
+├── users.py                # Extra password & account handling. 
+├── database.py             # Persistent storage for users and messages.
+├── frontend.py             # GUI application using Tkinter; supports chat functionality.
+├── client.py               # Frontend gRPC client.
+├── protocols_pb2_grpc.py   # Contains gRPC service definitions.
+├── protocols_pb2.py        # Contains the serialized message structures.
 
 ```
 
@@ -48,9 +46,6 @@ python src/server.py
 
 The server will be listening on `0.0.0.0:8000` for incoming connections by default.
 
-You can add additional command line flags to specify the address/port and whether to measure packet size. See server.py for more information. 
-
-
 ### Launching the Frontend
 
 To launch the chat application with a graphical interface, run:
@@ -61,9 +56,18 @@ python src/frontend.py
 ```
 
 The frontend uses Tkinter to provide a GUI for chat registration, login, and message handling. It connects to the backend server for real-time communication. 
-The client by default looks for a server on `0.0.0.0:8000`, but you can specify the host, port and whether to track package size using command line flags. For instance: 
+
+### Compiling `.proto` Files into Python Code
+
+To generate Python code from a Protocol Buffers (`.proto`) file, use the `protoc` compiler. Ensure you have the Protocol Buffers compiler installed. Run the following command from the root directory of your project:
+
+```bash
+python -m grpc_tools.protoc -I=src/protos --python_out=src --grpc_python_out=src src/protos/protocols.proto
+```
+This will generate two files:
 
 
+Ensure the generated files are placed in the correct src/ directory for use in your application.
 
 ## Testing 
 To test this code, run pytest from the src directory.
@@ -112,8 +116,6 @@ Run server specifying your address. Technically, this behavior should be enabled
 ```bash
 python src/server.py --host 172.11.11.1 --port 50051 --intercept
 ```
-
-
 
 #### Step 3: Run `client.py` with the Server’s IP specified
 

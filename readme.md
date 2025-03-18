@@ -62,7 +62,7 @@ The frontend uses Tkinter to provide a GUI for chat registration, login, and mes
 To generate Python code from a Protocol Buffers (`.proto`) file, use the `protoc` compiler. Ensure you have the Protocol Buffers compiler installed. Run the following command from the root directory of your project:
 
 ```bash
-python -m grpc_tools.protoc -I=src/protos --python_out=src --grpc_python_out=src src/protos/protocols.proto
+python -m grpc_tools.protoc -I=src/configs --python_out=src --grpc_python_out=src src/configs/protocols.proto
 ```
 This will generate two files:
 

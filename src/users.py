@@ -1,126 +1,123 @@
-# users.py
 import sqlite3
 import hashlib
-from database import initialize_database
-
-DB_FILE = "chat_app.db"
-
-
-def hash_password(password: str) -> str:
-    """
-    Hash the given password using SHA-256.
-
-    Args:
-        password (str): The password to hash.
-
-    Returns:
-        str: The SHA-256 hash of the password.
-    """
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+import os
+import logging
 
 
-def register_user(username: str, password: str) -> tuple[bool, str]:
-    """
-    Register a new user.
+class UserManager:
+    def __init__(self, db_file: str = None):
+        """
+        Initializes the UserManager with the given database file.
 
-    Args:
-        username (str): The username of the new user.
-        password (str): The password of the new user.
+        Args:
+            db_file (str, optional): Path to the SQLite database file.
+                                     Defaults to "chat_app.db".
+        """
+        self.db_file = db_file or os.environ.get("DB_FILE", "chat_app.db")
+        self.logger = logging.getLogger(__name__)
 
-    Returns:
-        tuple[bool, str]: A tuple containing success (bool) and message (str).
-    """
-    try:
-        # Connect to the database
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
+    def _hash_password(self, password: str) -> str:
+        """
+        Hash the given password using SHA-256.
 
-        # Check if the username already exists
-        cursor.execute("SELECT username FROM users WHERE username = ?", (username,))
-        if cursor.fetchone():
-            # If it does, return False with an appropriate message
-            return False, "Username already exists."
+        Args:
+            password (str): The password to hash.
 
-        # Hash the password
-        hashed_pw = hash_password(password)
+        Returns:
+            str: The SHA-256 hash of the password.
+        """
+        return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
-        # Insert new user into the database
-        cursor.execute(
-            """
-            INSERT INTO users (username, password_hash)
-            VALUES (?, ?)
-        """,
-            (username, hashed_pw),
-        )
+    def register_user(self, username: str, password: str) -> tuple[bool, str]:
+        """
+        Register a new user.
 
-        # Commit the changes
-        conn.commit()
-        # Return True with a success message
-        return True, "Registration successful. You can now log in."
-    except Exception as e:
-        # If an error occurs, print the error and return False with an appropriate message
-        print(f"[-] Error registering user: {e}")
-        return False, "Registration failed due to server error."
-    finally:
-        # Close the database connection
-        conn.close()
+        Args:
+            username (str): The username of the new user.
+            password (str): The password of the new user.
 
+        Returns:
+            tuple[bool, str]: A tuple containing success (bool) and message (str).
+        """
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
 
-def authenticate_user(username: str, password: str) -> bool:
-    """
-    Authenticate a user.
+            # Check if the username already exists
+            cursor.execute("SELECT username FROM users WHERE username = ?", (username,))
+            if cursor.fetchone():
+                return False, "Username already exists."
 
-    Args:
-        username (str): The username to authenticate.
-        password (str): The password to authenticate with.
+            # Hash the password and insert new user
+            hashed_pw = self._hash_password(password)
+            cursor.execute(
+                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                (username, hashed_pw),
+            )
 
-    Returns:
-        bool: True if the credentials are valid, False otherwise.
-    """
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
+            conn.commit()
+            return True, "Registration successful. You can now log in."
+        except Exception as e:
+            self.logger.error(f"Error registering user: {e}")
+            return False, "Registration failed due to server error."
+        finally:
+            if "conn" in locals() and conn:
+                conn.close()
 
-        cursor.execute(
-            "SELECT password_hash FROM users WHERE username = ?", (username,)
-        )
-        row = cursor.fetchone()
-        if not row:
+    def authenticate_user(self, username: str, password: str) -> bool:
+        """
+        Authenticate a user.
+
+        Args:
+            username (str): The username to authenticate.
+            password (str): The password to authenticate with.
+
+        Returns:
+            bool: True if the credentials are valid, False otherwise.
+        """
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                "SELECT password_hash FROM users WHERE username = ?", (username,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return False
+
+            stored_hash = row[0]
+            return stored_hash == self._hash_password(password)
+        except Exception as e:
+            self.logger.error(f"Error authenticating user: {e}")
             return False
+        finally:
+            if "conn" in locals() and conn:
+                conn.close()
 
-        stored_hash = row[0]
-        return stored_hash == hash_password(password)
-    except Exception as e:
-        print(f"[-] Error authenticating user: {e}")
-        return False
-    finally:
-        conn.close()
+    def delete_account(self, username: str) -> bool:
+        """
+        Deletes a user and their messages from the database.
 
+        Args:
+            username (str): The username to delete.
 
-def delete_account(username: str) -> bool:
-    """
-    Deletes a user and their messages from the database.
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
 
-    Args:
-        username (str): The username to delete.
+            # Delete user's messages first to maintain foreign key constraints
+            cursor.execute("DELETE FROM messages WHERE sender = ?", (username,))
+            cursor.execute("DELETE FROM users WHERE username = ?", (username,))
 
-    Returns:
-        bool: True if successful, False otherwise.
-    """
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-
-        # Delete the user's messages first (to maintain foreign key constraints)
-        cursor.execute("DELETE FROM messages WHERE sender = ?", (username,))
-
-        # Delete the user account
-        cursor.execute("DELETE FROM users WHERE username = ?", (username,))
-
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"[-] Error deleting user {username}: {e}")
-        return False
-    finally:
-        conn.close()
+            conn.commit()
+            return True
+        except Exception as e:
+            self.logger.error(f"Error deleting user {username}: {e}")
+            return False
+        finally:
+            if "conn" in locals() and conn:
+                conn.close()

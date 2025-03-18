@@ -1,0 +1,200 @@
+# replica_server.py
+import os
+import argparse
+from concurrent import futures
+import grpc
+import logging
+
+import replica_pb2
+import replica_pb2_grpc
+from database import Database  # Import the Database class
+from users import UserManager  # Import the UserManager class
+
+logging.basicConfig(level=logging.INFO)
+
+# Set the replica's DB file using the environment variable (or a default).
+replica_db_file = os.environ.get("DB_FILE", "replica_chat_app.db")
+# Create a Database instance for the replica.
+db = Database(replica_db_file)
+# Create a UserManager instance for user operations
+user_manager = UserManager(replica_db_file)
+
+
+class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
+    def RegisterUser(self, request, context):
+        logging.info(f"Replica: RegisterUser called for {request.username}")
+        try:
+            # Use UserManager to register the user
+            success, message = user_manager.register_user(
+                request.username, request.password
+            )
+
+            if success:
+                return replica_pb2.WriteOperationResponse(
+                    success=True, message="User registered."
+                )
+            else:
+                # If registration failed, propagate the failure
+                context.set_details(message)
+                context.set_code(grpc.StatusCode.INTERNAL)
+                return replica_pb2.WriteOperationResponse(
+                    success=False, message=message
+                )
+        except Exception as e:
+            logging.error(f"Error in RegisterUser on replica: {e}")
+            context.set_details("Error registering user in replica")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return replica_pb2.WriteOperationResponse(
+                success=False, message="User registration failed."
+            )
+
+    def DeleteAccount(self, request, context):
+        logging.info(f"Replica: DeleteAccount called for {request.username}")
+        try:
+            # Use UserManager to delete the account
+            success = user_manager.delete_account(request.username)
+
+            if success:
+                return replica_pb2.WriteOperationResponse(
+                    success=True, message="Account deleted."
+                )
+            else:
+                context.set_details("Failed to delete account")
+                context.set_code(grpc.StatusCode.INTERNAL)
+                return replica_pb2.WriteOperationResponse(
+                    success=False, message="Account deletion failed."
+                )
+        except Exception as e:
+            logging.error(f"Error in DeleteAccount on replica: {e}")
+            context.set_details("Error deleting account in replica")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return replica_pb2.WriteOperationResponse(
+                success=False, message="Account deletion failed."
+            )
+
+    def InsertMessage(self, request, context):
+        logging.info(f"Replica: InsertMessage called for message from {request.sender}")
+        try:
+            message_id = db.insert_message(
+                request.sender, request.content, request.receiver
+            )
+            return replica_pb2.WriteOperationResponse(
+                success=True, message=f"Message inserted with id {message_id}"
+            )
+        except Exception as e:
+            logging.error(f"Error in InsertMessage on replica: {e}")
+            context.set_details("Error inserting message in replica")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return replica_pb2.WriteOperationResponse(
+                success=False, message="Message insertion failed."
+            )
+
+    def MarkMessagesDelivered(self, request, context):
+        logging.info(
+            f"Replica: MarkMessagesDelivered called for user {request.user_id}"
+        )
+        try:
+            db.mark_messages_delivered(request.user_id)
+            return replica_pb2.WriteOperationResponse(
+                success=True, message="Messages marked delivered."
+            )
+        except Exception as e:
+            logging.error(f"Error in MarkMessagesDelivered on replica: {e}")
+            context.set_details("Error marking messages delivered in replica")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return replica_pb2.WriteOperationResponse(
+                success=False, message="Mark delivered failed."
+            )
+
+    def MarkMessagesAsRead(self, request, context):
+        logging.info(
+            f"Replica: MarkMessagesAsRead called for messages {request.message_ids}"
+        )
+        try:
+            db.mark_messages_as_read(list(request.message_ids))
+            return replica_pb2.WriteOperationResponse(
+                success=True, message="Messages marked as read."
+            )
+        except Exception as e:
+            logging.error(f"Error in MarkMessagesAsRead on replica: {e}")
+            context.set_details("Error marking messages as read in replica")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return replica_pb2.WriteOperationResponse(
+                success=False, message="Mark as read failed."
+            )
+
+    def SetNUnreadMessages(self, request, context):
+        logging.info(f"Replica: SetNUnreadMessages called for user {request.username}")
+        try:
+            result = db.set_n_unread_messages(
+                request.username, request.n_unread_messages
+            )
+            if result:
+                return replica_pb2.WriteOperationResponse(
+                    success=True, message="Unread messages count set."
+                )
+            else:
+                raise Exception("Failed to update unread messages count")
+        except Exception as e:
+            logging.error(f"Error in SetNUnreadMessages on replica: {e}")
+            context.set_details("Error setting unread messages count in replica")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return replica_pb2.WriteOperationResponse(
+                success=False, message="Set unread messages failed."
+            )
+
+    def DeleteMessage(self, request, context):
+        logging.info(
+            f"Replica: DeleteMessage called for message ID {request.message_id}"
+        )
+        try:
+            result = db.delete_message(request.message_id)
+            if result:
+                return replica_pb2.WriteOperationResponse(
+                    success=True, message="Message deleted."
+                )
+            else:
+                raise Exception("Deletion failed")
+        except Exception as e:
+            logging.error(f"Error in DeleteMessage on replica: {e}")
+            context.set_details("Error deleting message in replica")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return replica_pb2.WriteOperationResponse(
+                success=False, message="Message deletion failed."
+            )
+
+
+def serve(port="50052", db_file=None):
+    """Start the replica gRPC server."""
+    global db, user_manager
+
+    if db_file:
+        # Update the database and user manager with the specified DB file
+        db = Database(db_file)
+        user_manager = UserManager(db_file)
+
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    replica_pb2_grpc.add_ReplicaServiceServicer_to_server(
+        ReplicaServiceServicer(), server
+    )
+    server_address = f"[::]:{port}"
+    server.add_insecure_port(server_address)
+    logging.info(f"Replica server running on port {port} with DB file {db.db_file}...")
+    server.start()
+    server.wait_for_termination()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Start the replica server")
+    parser.add_argument(
+        "--port", type=str, default="50052", help="Port to run the replica on"
+    )
+    parser.add_argument(
+        "--db-file",
+        type=str,
+        default=None,
+        help="Database file path (defaults to env var DB_FILE or replica_chat_app.db)",
+    )
+
+    args = parser.parse_args()
+    serve(port=args.port, db_file=args.db_file)

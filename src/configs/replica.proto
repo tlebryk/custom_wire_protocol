@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package messaging.replica;
+
+// A common response for write operations.
+message WriteOperationResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Request message for registering a user.
+message RegisterUserRequest {
+  string username = 1;
+  string password = 2;
+}
+
+// Request message for deleting a user account.
+message DeleteAccountRequest {
+  string username = 1;
+}
+
+// Request message for inserting a message.
+message InsertMessageRequest {
+  string sender = 1;
+  string content = 2;
+  string receiver = 3;
+  string timestamp = 4;
+}
+
+// Request message for marking messages as delivered.
+message MarkMessagesDeliveredRequest {
+  string user_id = 1;
+}
+
+// Request message for marking messages as read.
+message MarkMessagesAsReadRequest {
+  repeated int32 message_ids = 1;
+}
+
+// Request message for setting the number of unread messages.
+message SetNUnreadMessagesRequest {
+  string username = 1;
+  int32 n_unread_messages = 2;
+}
+
+// Request message for deleting a message.
+message DeleteMessageRequest {
+  int32 message_id = 1;
+}
+
+// ReplicaService for propagating write operations.
+service ReplicaService {
+  rpc RegisterUser(RegisterUserRequest) returns (WriteOperationResponse);
+  rpc DeleteAccount(DeleteAccountRequest) returns (WriteOperationResponse);
+  rpc InsertMessage(InsertMessageRequest) returns (WriteOperationResponse);
+  rpc MarkMessagesDelivered(MarkMessagesDeliveredRequest) returns (WriteOperationResponse);
+  rpc MarkMessagesAsRead(MarkMessagesAsReadRequest) returns (WriteOperationResponse);
+  rpc SetNUnreadMessages(SetNUnreadMessagesRequest) returns (WriteOperationResponse);
+  rpc DeleteMessage(DeleteMessageRequest) returns (WriteOperationResponse);
+}

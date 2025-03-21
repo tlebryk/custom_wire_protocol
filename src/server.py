@@ -346,6 +346,73 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 message="Internal server error", status="error"
             )
 
+    def SetNUnreadMessages(self, request, context):
+        """
+        Set the number of unread messages for a user.
+
+        Updates the user's unread messages count in the leader's database, enqueues
+        unread messages for the user, and replicates the update to all replicas.
+        """
+        username = request.username
+        n_unread = request.n_unread_messages
+
+        # Retrieve current unread message count (if available)
+        user_info = self.db.get_user_info(username)
+        n_message_index = 1
+        if user_info:
+            n_unread_old = user_info[n_message_index]
+            if not n_unread_old:
+                n_unread_old = 50
+        else:
+            logging.info(f"User '{username}' not found in database.")
+            n_unread_old = 50
+
+        if not n_unread:
+            context.set_details("Number of unread messages is required.")
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            return protocols_pb2.SuccessResponse(
+                message="Number of unread messages is required.", status="error"
+            )
+
+        # Update the unread messages count in the database.
+        success = self.db.set_n_unread_messages(username, n_unread)
+        if success:
+            try:
+                unread_tuples = self.db.get_unread_messages(username, limit=n_unread)
+                for tup in unread_tuples:
+                    # Assume tuple order: (msg_id, sender, content, timestamp)
+                    msg_id, sender, content, timestamp = tup
+                    received_msg = protocols_pb2.ReceivedMessage(
+                        message=content,
+                        from_=sender,  # Note: use 'from_' to match the proto field name
+                        timestamp=timestamp,
+                        read="false",
+                        id=int(msg_id),
+                        username=sender,
+                    )
+                    self.enqueue_message(username, received_msg)
+            except Exception as e:
+                logging.error("Error fetching unread messages: %s", e)
+            # Replicate the update to all replicas.
+            replication_success = (
+                self.replication_manager.replicate_set_n_unread_messages(
+                    username, n_unread
+                )
+            )
+            if not replication_success:
+                logging.warning(
+                    f"Replication of unread message count update for {username} failed on some replicas"
+                )
+            return protocols_pb2.SuccessResponse(
+                message="Number of unread messages set successfully.", status="success"
+            )
+        else:
+            context.set_details("Failed to set number of unread messages.")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.SuccessResponse(
+                message="Failed to set number of unread messages.", status="error"
+            )
+
 
 def serve(port="50051", replica_addresses=None):
     """Start the gRPC server."""

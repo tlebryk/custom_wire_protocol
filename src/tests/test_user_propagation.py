@@ -1,4 +1,4 @@
-# test_integration_propagation.py
+# test_user_propagation.py
 import subprocess
 import os
 import time

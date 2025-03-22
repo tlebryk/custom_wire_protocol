@@ -173,9 +173,9 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 )
 
             # **DEBUG STEP: Log the descriptor for ReceivedMessage**
-            logging.info(
+            logging.debug(
                 "ReceivedMessage fields: %s",
-                protocols_pb2.ReceivedMessage.DESCRIPTOR.fields_by_name,
+                protocols_pb2.ReceivedMessage.DESCRIPTOR.fields_by_name.keys(),
             )
 
             # Now try constructing the ReceivedMessage

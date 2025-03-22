@@ -5,31 +5,29 @@ import warnings
 
 import replica_pb2 as replica__pb2
 
-GRPC_GENERATED_VERSION = "1.71.0"
+GRPC_GENERATED_VERSION = '1.70.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
 try:
     from grpc._utilities import first_version_is_lower
-
-    _version_not_supported = first_version_is_lower(
-        GRPC_VERSION, GRPC_GENERATED_VERSION
-    )
+    _version_not_supported = first_version_is_lower(GRPC_VERSION, GRPC_GENERATED_VERSION)
 except ImportError:
     _version_not_supported = True
 
 if _version_not_supported:
     raise RuntimeError(
-        f"The grpc package installed is at version {GRPC_VERSION},"
-        + f" but the generated code in replica_pb2_grpc.py depends on"
-        + f" grpcio>={GRPC_GENERATED_VERSION}."
-        + f" Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}"
-        + f" or downgrade your generated code using grpcio-tools<={GRPC_VERSION}."
+        f'The grpc package installed is at version {GRPC_VERSION},'
+        + f' but the generated code in replica_pb2_grpc.py depends on'
+        + f' grpcio>={GRPC_GENERATED_VERSION}.'
+        + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
+        + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
 class ReplicaServiceStub(object):
-    """ReplicaService for propagating write operations."""
+    """ReplicaService for propagating write operations.
+    """
 
     def __init__(self, channel):
         """Constructor.
@@ -38,163 +36,153 @@ class ReplicaServiceStub(object):
             channel: A grpc.Channel.
         """
         self.RegisterUser = channel.unary_unary(
-            "/messaging.replica.ReplicaService/RegisterUser",
-            request_serializer=replica__pb2.RegisterUserRequest.SerializeToString,
-            response_deserializer=replica__pb2.WriteOperationResponse.FromString,
-            _registered_method=True,
-        )
+                '/messaging.replica.ReplicaService/RegisterUser',
+                request_serializer=replica__pb2.RegisterUserRequest.SerializeToString,
+                response_deserializer=replica__pb2.WriteOperationResponse.FromString,
+                _registered_method=True)
         self.DeleteAccount = channel.unary_unary(
-            "/messaging.replica.ReplicaService/DeleteAccount",
-            request_serializer=replica__pb2.DeleteAccountRequest.SerializeToString,
-            response_deserializer=replica__pb2.WriteOperationResponse.FromString,
-            _registered_method=True,
-        )
+                '/messaging.replica.ReplicaService/DeleteAccount',
+                request_serializer=replica__pb2.DeleteAccountRequest.SerializeToString,
+                response_deserializer=replica__pb2.WriteOperationResponse.FromString,
+                _registered_method=True)
         self.InsertMessage = channel.unary_unary(
-            "/messaging.replica.ReplicaService/InsertMessage",
-            request_serializer=replica__pb2.InsertMessageRequest.SerializeToString,
-            response_deserializer=replica__pb2.WriteOperationResponse.FromString,
-            _registered_method=True,
-        )
+                '/messaging.replica.ReplicaService/InsertMessage',
+                request_serializer=replica__pb2.InsertMessageRequest.SerializeToString,
+                response_deserializer=replica__pb2.WriteOperationResponse.FromString,
+                _registered_method=True)
         self.MarkMessagesDelivered = channel.unary_unary(
-            "/messaging.replica.ReplicaService/MarkMessagesDelivered",
-            request_serializer=replica__pb2.MarkMessagesDeliveredRequest.SerializeToString,
-            response_deserializer=replica__pb2.WriteOperationResponse.FromString,
-            _registered_method=True,
-        )
+                '/messaging.replica.ReplicaService/MarkMessagesDelivered',
+                request_serializer=replica__pb2.MarkMessagesDeliveredRequest.SerializeToString,
+                response_deserializer=replica__pb2.WriteOperationResponse.FromString,
+                _registered_method=True)
         self.MarkMessagesAsRead = channel.unary_unary(
-            "/messaging.replica.ReplicaService/MarkMessagesAsRead",
-            request_serializer=replica__pb2.MarkMessagesAsReadRequest.SerializeToString,
-            response_deserializer=replica__pb2.WriteOperationResponse.FromString,
-            _registered_method=True,
-        )
+                '/messaging.replica.ReplicaService/MarkMessagesAsRead',
+                request_serializer=replica__pb2.MarkMessagesAsReadRequest.SerializeToString,
+                response_deserializer=replica__pb2.WriteOperationResponse.FromString,
+                _registered_method=True)
         self.SetNUnreadMessages = channel.unary_unary(
-            "/messaging.replica.ReplicaService/SetNUnreadMessages",
-            request_serializer=replica__pb2.SetNUnreadMessagesRequest.SerializeToString,
-            response_deserializer=replica__pb2.WriteOperationResponse.FromString,
-            _registered_method=True,
-        )
+                '/messaging.replica.ReplicaService/SetNUnreadMessages',
+                request_serializer=replica__pb2.SetNUnreadMessagesRequest.SerializeToString,
+                response_deserializer=replica__pb2.WriteOperationResponse.FromString,
+                _registered_method=True)
         self.DeleteMessage = channel.unary_unary(
-            "/messaging.replica.ReplicaService/DeleteMessage",
-            request_serializer=replica__pb2.DeleteMessageRequest.SerializeToString,
-            response_deserializer=replica__pb2.WriteOperationResponse.FromString,
-            _registered_method=True,
-        )
+                '/messaging.replica.ReplicaService/DeleteMessage',
+                request_serializer=replica__pb2.DeleteMessageRequest.SerializeToString,
+                response_deserializer=replica__pb2.WriteOperationResponse.FromString,
+                _registered_method=True)
 
 
 class ReplicaServiceServicer(object):
-    """ReplicaService for propagating write operations."""
+    """ReplicaService for propagating write operations.
+    """
 
     def RegisterUser(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def DeleteAccount(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def InsertMessage(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def MarkMessagesDelivered(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def MarkMessagesAsRead(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def SetNUnreadMessages(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def DeleteMessage(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("Method not implemented!")
-        raise NotImplementedError("Method not implemented!")
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
 
 def add_ReplicaServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-        "RegisterUser": grpc.unary_unary_rpc_method_handler(
-            servicer.RegisterUser,
-            request_deserializer=replica__pb2.RegisterUserRequest.FromString,
-            response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
-        ),
-        "DeleteAccount": grpc.unary_unary_rpc_method_handler(
-            servicer.DeleteAccount,
-            request_deserializer=replica__pb2.DeleteAccountRequest.FromString,
-            response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
-        ),
-        "InsertMessage": grpc.unary_unary_rpc_method_handler(
-            servicer.InsertMessage,
-            request_deserializer=replica__pb2.InsertMessageRequest.FromString,
-            response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
-        ),
-        "MarkMessagesDelivered": grpc.unary_unary_rpc_method_handler(
-            servicer.MarkMessagesDelivered,
-            request_deserializer=replica__pb2.MarkMessagesDeliveredRequest.FromString,
-            response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
-        ),
-        "MarkMessagesAsRead": grpc.unary_unary_rpc_method_handler(
-            servicer.MarkMessagesAsRead,
-            request_deserializer=replica__pb2.MarkMessagesAsReadRequest.FromString,
-            response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
-        ),
-        "SetNUnreadMessages": grpc.unary_unary_rpc_method_handler(
-            servicer.SetNUnreadMessages,
-            request_deserializer=replica__pb2.SetNUnreadMessagesRequest.FromString,
-            response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
-        ),
-        "DeleteMessage": grpc.unary_unary_rpc_method_handler(
-            servicer.DeleteMessage,
-            request_deserializer=replica__pb2.DeleteMessageRequest.FromString,
-            response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
-        ),
+            'RegisterUser': grpc.unary_unary_rpc_method_handler(
+                    servicer.RegisterUser,
+                    request_deserializer=replica__pb2.RegisterUserRequest.FromString,
+                    response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
+            ),
+            'DeleteAccount': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteAccount,
+                    request_deserializer=replica__pb2.DeleteAccountRequest.FromString,
+                    response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
+            ),
+            'InsertMessage': grpc.unary_unary_rpc_method_handler(
+                    servicer.InsertMessage,
+                    request_deserializer=replica__pb2.InsertMessageRequest.FromString,
+                    response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
+            ),
+            'MarkMessagesDelivered': grpc.unary_unary_rpc_method_handler(
+                    servicer.MarkMessagesDelivered,
+                    request_deserializer=replica__pb2.MarkMessagesDeliveredRequest.FromString,
+                    response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
+            ),
+            'MarkMessagesAsRead': grpc.unary_unary_rpc_method_handler(
+                    servicer.MarkMessagesAsRead,
+                    request_deserializer=replica__pb2.MarkMessagesAsReadRequest.FromString,
+                    response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
+            ),
+            'SetNUnreadMessages': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetNUnreadMessages,
+                    request_deserializer=replica__pb2.SetNUnreadMessagesRequest.FromString,
+                    response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
+            ),
+            'DeleteMessage': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteMessage,
+                    request_deserializer=replica__pb2.DeleteMessageRequest.FromString,
+                    response_serializer=replica__pb2.WriteOperationResponse.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-        "messaging.replica.ReplicaService", rpc_method_handlers
-    )
+            'messaging.replica.ReplicaService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers(
-        "messaging.replica.ReplicaService", rpc_method_handlers
-    )
+    server.add_registered_method_handlers('messaging.replica.ReplicaService', rpc_method_handlers)
 
 
-# This class is part of an EXPERIMENTAL API.
+ # This class is part of an EXPERIMENTAL API.
 class ReplicaService(object):
-    """ReplicaService for propagating write operations."""
+    """ReplicaService for propagating write operations.
+    """
 
     @staticmethod
-    def RegisterUser(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
+    def RegisterUser(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/messaging.replica.ReplicaService/RegisterUser",
+            '/messaging.replica.ReplicaService/RegisterUser',
             replica__pb2.RegisterUserRequest.SerializeToString,
             replica__pb2.WriteOperationResponse.FromString,
             options,
@@ -205,26 +193,23 @@ class ReplicaService(object):
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True,
-        )
+            _registered_method=True)
 
     @staticmethod
-    def DeleteAccount(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
+    def DeleteAccount(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/messaging.replica.ReplicaService/DeleteAccount",
+            '/messaging.replica.ReplicaService/DeleteAccount',
             replica__pb2.DeleteAccountRequest.SerializeToString,
             replica__pb2.WriteOperationResponse.FromString,
             options,
@@ -235,26 +220,23 @@ class ReplicaService(object):
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True,
-        )
+            _registered_method=True)
 
     @staticmethod
-    def InsertMessage(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
+    def InsertMessage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/messaging.replica.ReplicaService/InsertMessage",
+            '/messaging.replica.ReplicaService/InsertMessage',
             replica__pb2.InsertMessageRequest.SerializeToString,
             replica__pb2.WriteOperationResponse.FromString,
             options,
@@ -265,26 +247,23 @@ class ReplicaService(object):
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True,
-        )
+            _registered_method=True)
 
     @staticmethod
-    def MarkMessagesDelivered(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
+    def MarkMessagesDelivered(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/messaging.replica.ReplicaService/MarkMessagesDelivered",
+            '/messaging.replica.ReplicaService/MarkMessagesDelivered',
             replica__pb2.MarkMessagesDeliveredRequest.SerializeToString,
             replica__pb2.WriteOperationResponse.FromString,
             options,
@@ -295,26 +274,23 @@ class ReplicaService(object):
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True,
-        )
+            _registered_method=True)
 
     @staticmethod
-    def MarkMessagesAsRead(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
+    def MarkMessagesAsRead(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/messaging.replica.ReplicaService/MarkMessagesAsRead",
+            '/messaging.replica.ReplicaService/MarkMessagesAsRead',
             replica__pb2.MarkMessagesAsReadRequest.SerializeToString,
             replica__pb2.WriteOperationResponse.FromString,
             options,
@@ -325,26 +301,23 @@ class ReplicaService(object):
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True,
-        )
+            _registered_method=True)
 
     @staticmethod
-    def SetNUnreadMessages(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
+    def SetNUnreadMessages(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/messaging.replica.ReplicaService/SetNUnreadMessages",
+            '/messaging.replica.ReplicaService/SetNUnreadMessages',
             replica__pb2.SetNUnreadMessagesRequest.SerializeToString,
             replica__pb2.WriteOperationResponse.FromString,
             options,
@@ -355,26 +328,23 @@ class ReplicaService(object):
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True,
-        )
+            _registered_method=True)
 
     @staticmethod
-    def DeleteMessage(
-        request,
-        target,
-        options=(),
-        channel_credentials=None,
-        call_credentials=None,
-        insecure=False,
-        compression=None,
-        wait_for_ready=None,
-        timeout=None,
-        metadata=None,
-    ):
+    def DeleteMessage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
         return grpc.experimental.unary_unary(
             request,
             target,
-            "/messaging.replica.ReplicaService/DeleteMessage",
+            '/messaging.replica.ReplicaService/DeleteMessage',
             replica__pb2.DeleteMessageRequest.SerializeToString,
             replica__pb2.WriteOperationResponse.FromString,
             options,
@@ -385,5 +355,4 @@ class ReplicaService(object):
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True,
-        )
+            _registered_method=True)

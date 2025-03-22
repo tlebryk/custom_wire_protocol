@@ -10,6 +10,7 @@ services:
       - DB_FILE=/data/chat_app.db
     volumes:
       - ./data/server:/data
+      - ./logs:/app/logs
     networks:
       - chat-network
     depends_on:
@@ -25,6 +26,7 @@ services:
       - DB_FILE=/data/replica1_chat_app.db
     volumes:
       - ./data/replica1:/data
+      - ./logs:/app/logs
     networks:
       - chat-network
 
@@ -37,6 +39,7 @@ services:
       - DB_FILE=/data/replica2_chat_app.db
     volumes:
       - ./data/replica2:/data
+      - ./logs:/app/logs
     networks:
       - chat-network
 

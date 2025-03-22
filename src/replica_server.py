@@ -12,9 +12,10 @@ from users import UserManager  # Import the UserManager class
 
 import threading
 from election_manager import ElectionManager
+from logger import setup_logger
 import time
 
-logging.basicConfig(level=logging.INFO)
+logger = setup_logger("server")
 # Global variable to store this replica's ID.
 REPLICA_ID = None
 
@@ -33,20 +34,20 @@ def monitor_leader(election_manager, check_interval=10):
         # For simplicity, assume we decide to run an election every check_interval seconds.
         if election_manager.elect_leader():
             # Transition to leader mode.
-            logging.info("Transitioning to leader mode.")
+            logger.info("Transitioning to leader mode.")
             # For example, you might stop the current server and re-run leader code:
             # shutdown current gRPC server and launch the leader service (e.g., server.py)
             # Alternatively, set a flag that switches request handling.
             # Here we'll just log it.
             break
         else:
-            logging.info("Leader election check: still not leader.")
+            logger.info("Leader election check: still not leader.")
         time.sleep(check_interval)
 
 
 class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
     def RegisterUser(self, request, context):
-        logging.info(f"Replica: RegisterUser called for {request.username}")
+        logger.info(f"Replica: RegisterUser called for {request.username}")
         try:
             # Use UserManager to register the user
             success, message = user_manager.register_user(
@@ -65,7 +66,7 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
                     success=False, message=message
                 )
         except Exception as e:
-            logging.error(f"Error in RegisterUser on replica: {e}")
+            logger.error(f"Error in RegisterUser on replica: {e}")
             context.set_details("Error registering user in replica")
             context.set_code(grpc.StatusCode.INTERNAL)
             return replica_pb2.WriteOperationResponse(
@@ -73,7 +74,7 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             )
 
     def DeleteAccount(self, request, context):
-        logging.info(f"Replica: DeleteAccount called for {request.username}")
+        logger.info(f"Replica: DeleteAccount called for {request.username}")
         try:
             # Use UserManager to delete the account
             success = user_manager.delete_account(request.username)
@@ -89,7 +90,7 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
                     success=False, message="Account deletion failed."
                 )
         except Exception as e:
-            logging.error(f"Error in DeleteAccount on replica: {e}")
+            logger.error(f"Error in DeleteAccount on replica: {e}")
             context.set_details("Error deleting account in replica")
             context.set_code(grpc.StatusCode.INTERNAL)
             return replica_pb2.WriteOperationResponse(
@@ -97,7 +98,7 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             )
 
     def InsertMessage(self, request, context):
-        logging.info(f"Replica: InsertMessage called for message from {request.sender}")
+        logger.info(f"Replica: InsertMessage called for message from {request.sender}")
         try:
             message_id = db.insert_message(
                 request.sender, request.content, request.receiver
@@ -106,7 +107,7 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
                 success=True, message=f"Message inserted with id {message_id}"
             )
         except Exception as e:
-            logging.error(f"Error in InsertMessage on replica: {e}")
+            logger.error(f"Error in InsertMessage on replica: {e}")
             context.set_details("Error inserting message in replica")
             context.set_code(grpc.StatusCode.INTERNAL)
             return replica_pb2.WriteOperationResponse(
@@ -114,16 +115,14 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             )
 
     def MarkMessagesDelivered(self, request, context):
-        logging.info(
-            f"Replica: MarkMessagesDelivered called for user {request.user_id}"
-        )
+        logger.info(f"Replica: MarkMessagesDelivered called for user {request.user_id}")
         try:
             db.mark_messages_delivered(request.user_id)
             return replica_pb2.WriteOperationResponse(
                 success=True, message="Messages marked delivered."
             )
         except Exception as e:
-            logging.error(f"Error in MarkMessagesDelivered on replica: {e}")
+            logger.error(f"Error in MarkMessagesDelivered on replica: {e}")
             context.set_details("Error marking messages delivered in replica")
             context.set_code(grpc.StatusCode.INTERNAL)
             return replica_pb2.WriteOperationResponse(
@@ -131,7 +130,7 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             )
 
     def MarkMessagesAsRead(self, request, context):
-        logging.info(
+        logger.info(
             f"Replica: MarkMessagesAsRead called for messages {request.message_ids}"
         )
         try:
@@ -140,7 +139,7 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
                 success=True, message="Messages marked as read."
             )
         except Exception as e:
-            logging.error(f"Error in MarkMessagesAsRead on replica: {e}")
+            logger.error(f"Error in MarkMessagesAsRead on replica: {e}")
             context.set_details("Error marking messages as read in replica")
             context.set_code(grpc.StatusCode.INTERNAL)
             return replica_pb2.WriteOperationResponse(
@@ -148,7 +147,7 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             )
 
     def SetNUnreadMessages(self, request, context):
-        logging.info(f"Replica: SetNUnreadMessages called for user {request.username}")
+        logger.info(f"Replica: SetNUnreadMessages called for user {request.username}")
         try:
             result = db.set_n_unread_messages(
                 request.username, request.n_unread_messages
@@ -160,7 +159,7 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             else:
                 raise Exception("Failed to update unread messages count")
         except Exception as e:
-            logging.error(f"Error in SetNUnreadMessages on replica: {e}")
+            logger.error(f"Error in SetNUnreadMessages on replica: {e}")
             context.set_details("Error setting unread messages count in replica")
             context.set_code(grpc.StatusCode.INTERNAL)
             return replica_pb2.WriteOperationResponse(
@@ -168,7 +167,7 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             )
 
     def DeleteMessage(self, request, context):
-        logging.info(
+        logger.info(
             f"Replica: DeleteMessage called for message ID {request.message_id}"
         )
         try:
@@ -180,7 +179,7 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             else:
                 raise Exception("Deletion failed")
         except Exception as e:
-            logging.error(f"Error in DeleteMessage on replica: {e}")
+            logger.error(f"Error in DeleteMessage on replica: {e}")
             context.set_details("Error deleting message in replica")
             context.set_code(grpc.StatusCode.INTERNAL)
             return replica_pb2.WriteOperationResponse(
@@ -207,7 +206,7 @@ def serve(port="50052", db_file=None, replica_id=0):
     )
     server_address = f"[::]:{port}"
     server.add_insecure_port(server_address)
-    logging.info(
+    logger.info(
         f"Replica server (ID={REPLICA_ID}) running on port {port} with DB file {db.db_file}..."
     )
 

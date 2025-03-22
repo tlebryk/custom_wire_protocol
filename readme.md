@@ -40,7 +40,8 @@ src/
 #### Option 1 (recommended): docker compose
 
 ```bash
-docker-compose -f src/docker-compose.yaml up -d 
+# cd src
+docker-compose up -d 
 ```
 
 To test killing and individual service

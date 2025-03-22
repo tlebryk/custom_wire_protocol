@@ -1,21 +1,24 @@
 # server.py
-from concurrent import futures
-import grpc
+import argparse
 import logging
+import os
 import threading
 import time
+from concurrent import futures
 from datetime import datetime
-from server_intercepter import SizeLoggingServerInterceptor
-from users import UserManager
-from database import Database
-from replication_manager import ReplicationManager  # Import the new ReplicationManager
+
+import grpc
 
 import protocols_pb2
 import protocols_pb2_grpc
-import argparse
-import os
+from database import Database
+from logger import setup_logger
+from replication_manager import ReplicationManager  # Import the new ReplicationManager
+from server_intercepter import SizeLoggingServerInterceptor
+from users import UserManager
 
-logging.basicConfig(level=logging.INFO)
+# Set up logger for the server
+logger = setup_logger("server")
 
 
 class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
@@ -44,7 +47,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
     def Login(self, request, context):
         """Authenticate a user."""
-        logging.info("Login called for user: %s", request.username)
+        logger.info("Login called for user: %s", request.username)
         if self.user_manager.authenticate_user(request.username, request.password):
             with self.online_users_lock:
                 self.online_users[request.username] = (context, [])
@@ -62,7 +65,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
     def Register(self, request, context):
         """Register a new user."""
-        logging.info("Register called for user: %s", request.username)
+        logger.info("Register called for user: %s", request.username)
         success, msg = self.user_manager.register_user(
             request.username, request.password
         )
@@ -73,7 +76,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 request.username, request.password
             )
             if not replication_success:
-                logging.warning(
+                logger.warning(
                     f"Replication of user registration for {request.username} failed on some replicas"
                 )
                 # Note: We're not failing the request even if replication fails
@@ -85,7 +88,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
     def DeleteAccount(self, request, context):
         """Delete a user's account."""
-        logging.info("DeleteAccount called for user: %s", request.username)
+        logger.info("DeleteAccount called for user: %s", request.username)
         success = self.user_manager.delete_account(request.username)
 
         if success:
@@ -98,7 +101,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 request.username
             )
             if not replication_success:
-                logging.warning(
+                logger.warning(
                     f"Replication of account deletion for {request.username} failed on some replicas"
                 )
                 # Again, we're continuing even if replication fails
@@ -115,7 +118,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
     def Subscribe(self, request, context):
         """Allow a user to receive messages."""
-        logging.info("Subscribe called for user: %s", request.username)
+        logger.info("Subscribe called for user: %s", request.username)
         with self.online_users_lock:
             self.online_users[request.username] = (context, [])
 
@@ -127,15 +130,15 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                         yield msg_queue.pop(0)
                 time.sleep(0.5)
         except Exception as e:
-            logging.error("Error in Subscribe for user %s: %s", request.username, e)
+            logger.error("Error in Subscribe for user %s: %s", request.username, e)
         finally:
             with self.online_users_lock:
                 self.online_users.pop(request.username, None)
-            logging.info("User %s unsubscribed.", request.username)
+            logger.info("User %s unsubscribed.", request.username)
 
     def SendMessage(self, request, context):
         """Send a message to another user."""
-        logging.info(
+        logger.info(
             "SendMessage called. Message: %s, Receiver: %s",
             request.message,
             request.receiver,
@@ -160,7 +163,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             message_id = self.db.insert_message(
                 sender, request.message, request.receiver
             )
-            logging.info("Message inserted with ID: %d", message_id)
+            logger.info("Message inserted with ID: %d", message_id)
 
             # Replicate message insertion to replicas
             timestamp = datetime.utcnow().isoformat() + "Z"
@@ -168,12 +171,12 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 sender, request.message, request.receiver, timestamp
             )
             if not replication_success:
-                logging.warning(
+                logger.warning(
                     f"Replication of message from {sender} to {request.receiver} failed on some replicas"
                 )
 
             # **DEBUG STEP: Log the descriptor for ReceivedMessage**
-            logging.info(
+            logger.info(
                 "ReceivedMessage fields: %s",
                 protocols_pb2.ReceivedMessage.DESCRIPTOR.fields_by_name,
             )
@@ -189,7 +192,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                     username=sender,
                 )
             except Exception as e:
-                logging.error("Failed to create ReceivedMessage: %s", e)
+                logger.error("Failed to create ReceivedMessage: %s", e)
                 raise
 
             with self.online_users_lock:
@@ -197,7 +200,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
             if receiver_entry:
                 self.enqueue_message(request.receiver, received_msg)
-                logging.info(
+                logger.info(
                     "Message enqueued for online receiver '%s'.", request.receiver
                 )
 
@@ -207,7 +210,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 timestamp=timestamp,
             )
         except Exception as e:
-            logging.error("Error in SendMessage: %s", e)
+            logger.error("Error in SendMessage: %s", e)
             context.set_code(grpc.StatusCode.INTERNAL)
             return protocols_pb2.ConfirmSendMessageResponse(
                 message="Internal server error", status="error"
@@ -219,7 +222,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             users = self.db.search_users_in_db(request.query)
             return protocols_pb2.SearchUsersResponse(usernames=users, status="success")
         except Exception as e:
-            logging.error("Error searching for users: %s", e)
+            logger.error("Error searching for users: %s", e)
             context.set_code(grpc.StatusCode.INTERNAL)
             return protocols_pb2.SearchUsersResponse(usernames=[], status="error")
 
@@ -277,7 +280,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 self.replication_manager.replicate_mark_messages_as_read(message_ids)
             )
             if not replication_success:
-                logging.warning(
+                logger.warning(
                     f"Replication of mark as read for {message_ids} failed on some replicas"
                 )
 
@@ -302,7 +305,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                     message_id
                 )
                 if not replication_success:
-                    logging.warning(
+                    logger.warning(
                         f"Replication of message deletion for message {message_id} failed on some replicas"
                     )
 
@@ -316,7 +319,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                     message="Failed to delete message.", status="error"
                 )
         except Exception as e:
-            logging.error(f"Error in DeleteMessage: {e}")
+            logger.error(f"Error in DeleteMessage: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
             return protocols_pb2.SuccessResponse(
                 message="Internal server error", status="error"
@@ -337,7 +340,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                     )
                 )
                 if not replication_success:
-                    logging.warning(
+                    logger.warning(
                         f"Replication of unread message count update for {username} failed on some replicas"
                     )
 
@@ -352,7 +355,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                     message="Failed to update unread message count.", status="error"
                 )
         except Exception as e:
-            logging.error(f"Error in UpdateUnreadMessageCount: {e}")
+            logger.error(f"Error in UpdateUnreadMessageCount: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
             return protocols_pb2.SuccessResponse(
                 message="Internal server error", status="error"
@@ -376,7 +379,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             if not n_unread_old:
                 n_unread_old = 50
         else:
-            logging.info(f"User '{username}' not found in database.")
+            logger.info(f"User '{username}' not found in database.")
             n_unread_old = 50
 
         if not n_unread:
@@ -404,7 +407,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                     )
                     self.enqueue_message(username, received_msg)
             except Exception as e:
-                logging.error("Error fetching unread messages: %s", e)
+                logger.error("Error fetching unread messages: %s", e)
             # Replicate the update to all replicas.
             replication_success = (
                 self.replication_manager.replicate_set_n_unread_messages(
@@ -412,7 +415,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 )
             )
             if not replication_success:
-                logging.warning(
+                logger.warning(
                     f"Replication of unread message count update for {username} failed on some replicas"
                 )
             return protocols_pb2.SuccessResponse(
@@ -436,7 +439,7 @@ def serve(port="50051", replica_addresses=None):
     protocols_pb2_grpc.add_MessagingServiceServicer_to_server(messaging_service, server)
     server_address = f"[::]:{port}"
     server.add_insecure_port(server_address)
-    logging.info(f"gRPC server running on port {port}...")
+    logger.info(f"gRPC server running on port {port}...")
     server.start()
     server.wait_for_termination()
 

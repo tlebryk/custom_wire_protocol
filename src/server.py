@@ -1,3 +1,4 @@
+# server.py
 from concurrent import futures
 import grpc
 import logging
@@ -171,14 +172,25 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                     f"Replication of message from {sender} to {request.receiver} failed on some replicas"
                 )
 
-            received_msg = protocols_pb2.ReceivedMessage(
-                message=request.message,
-                sender=sender,
-                timestamp=timestamp,
-                read="false",
-                id=message_id,
-                username=sender,
+            # **DEBUG STEP: Log the descriptor for ReceivedMessage**
+            logging.info(
+                "ReceivedMessage fields: %s",
+                protocols_pb2.ReceivedMessage.DESCRIPTOR.fields_by_name,
             )
+
+            # Now try constructing the ReceivedMessage
+            try:
+                received_msg = protocols_pb2.ReceivedMessage(
+                    message=request.message,
+                    sender=sender,  # this expects a field named 'sender'
+                    timestamp=timestamp,
+                    read="false",
+                    id=message_id,
+                    username=sender,
+                )
+            except Exception as e:
+                logging.error("Failed to create ReceivedMessage: %s", e)
+                raise
 
             with self.online_users_lock:
                 receiver_entry = self.online_users.get(request.receiver)

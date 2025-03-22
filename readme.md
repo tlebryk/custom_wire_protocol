@@ -35,16 +35,50 @@ src/
 
 ## Running the Application
 
-### Starting the Backend Server
+### Running the Backend Server
 
+#### Option 1 (recommended): docker compose
+
+```bash
+docker-compose up -d
+```
+
+To test killing and individual service
+
+```bash
+# Kill a specific replica
+docker-compose stop replica1
+docker-compose rm -f replica1
+
+# Kill the server
+docker-compose stop server
+docker-compose rm -f server
+
+# restart the service (not functional right now)
+docker-compose up -d --no-deps --build replica1
+
+# to gracefully kill the entire backend
+docker-compose down
+```
+
+#### Option 2: individual docker containers 
+```bash
+docker build -t chat-app src
+docker run -d --name chat-server -p 50051:50051 -e DB_FILE=/data/chat_app.db -v $(pwd)/data/server:/data chat-app python server.py --port 50051 --replicas replica1:50052,replica2:50053
+docker run -d --name chat-replica1 -p 50052:50052 -e DB_FILE=/data/replica1_chat_app1.db -v $(pwd)/data/replica1:/data chat-app python replica_server.py --port 50052 --replica-id 1
+docker run -d --name chat-replica2 -p 50053:50053 -e DB_FILE=/data/replica2_chat_app2.db -v $(pwd)/data/replica2:/data chat-app python replica_server.py --port 50053 --replica-id 2
+```
+
+#### Option 3: running scripts
 Run the following command to start the backend server:
 
 ```bash
-python src/server.py
+python src/server.py --port 50051:50051 --replicas replica1:50052,replica2:50053
+python src/replica_server.py --port 50052:50052 -e DB_FILE=/data/replica1_chat_app1.db --replica-id 1
+python src/replica_server.py --port 50053:50053 -e DB_FILE=/data/replica1_chat_app2.db --replica-id 2
 
 ```
 
-The server will be listening on `0.0.0.0:8000` for incoming connections by default.
 
 ### Launching the Frontend
 

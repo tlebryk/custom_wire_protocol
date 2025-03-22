@@ -63,6 +63,7 @@ To generate Python code from a Protocol Buffers (`.proto`) file, use the `protoc
 
 ```bash
 python -m grpc_tools.protoc -I=src/configs --python_out=src --grpc_python_out=src src/configs/protocols.proto
+python -m grpc_tools.protoc -I=src/configs --python_out=src --grpc_python_out=src src/configs/replica.proto
 ```
 This will generate two files:
 

@@ -65,7 +65,7 @@ message SendMessageRequest {
 message ConfirmSendMessageResponse {
   string message = 1;
   string status = 2;
-  string from = 3;
+  string sender = 3;
   string timestamp = 4;
 }
 
@@ -81,7 +81,7 @@ message ConfirmEchoResponse {
 message ChatMessage {
   string message = 1;
   string timestamp = 2;
-  string from = 3;
+  string sender = 3;
   int32 id = 4;
 }
 
@@ -119,7 +119,7 @@ message DeleteAccountRequest {
 }
 
 message ReceivedMessage {
-  string from = 1;
+  string sender = 1;
   string message = 2;
   string timestamp = 3;
   string read = 4;

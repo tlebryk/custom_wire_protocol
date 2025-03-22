@@ -10,7 +10,14 @@ import replica_pb2_grpc
 from database import Database  # Import the Database class
 from users import UserManager  # Import the UserManager class
 
+import threading
+from election_manager import ElectionManager
+import time
+
 logging.basicConfig(level=logging.INFO)
+# Global variable to store this replica's ID.
+REPLICA_ID = None
+
 
 # Set the replica's DB file using the environment variable (or a default).
 replica_db_file = os.environ.get("DB_FILE", "replica_chat_app.db")
@@ -18,6 +25,23 @@ replica_db_file = os.environ.get("DB_FILE", "replica_chat_app.db")
 db = Database(replica_db_file)
 # Create a UserManager instance for user operations
 user_manager = UserManager(replica_db_file)
+
+
+def monitor_leader(election_manager, check_interval=10):
+    while True:
+        # This is where you would normally detect the leader is down.
+        # For simplicity, assume we decide to run an election every check_interval seconds.
+        if election_manager.elect_leader():
+            # Transition to leader mode.
+            logging.info("Transitioning to leader mode.")
+            # For example, you might stop the current server and re-run leader code:
+            # shutdown current gRPC server and launch the leader service (e.g., server.py)
+            # Alternatively, set a flag that switches request handling.
+            # Here we'll just log it.
+            break
+        else:
+            logging.info("Leader election check: still not leader.")
+        time.sleep(check_interval)
 
 
 class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
@@ -163,13 +187,17 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
                 success=False, message="Message deletion failed."
             )
 
+    def GetReplicaID(self, request, context):
+        """Return the replica's ID."""
+        global REPLICA_ID
+        return replica_pb2.GetReplicaIDResponse(replica_id=REPLICA_ID)
 
-def serve(port="50052", db_file=None):
-    """Start the replica gRPC server."""
-    global db, user_manager
 
+def serve(port="50052", db_file=None, replica_id=0):
+    global REPLICA_ID, db, user_manager
+    REPLICA_ID = replica_id  # Save the replica ID.
+    # (Re)initialize database and user_manager if needed.
     if db_file:
-        # Update the database and user manager with the specified DB file
         db = Database(db_file)
         user_manager = UserManager(db_file)
 
@@ -179,7 +207,19 @@ def serve(port="50052", db_file=None):
     )
     server_address = f"[::]:{port}"
     server.add_insecure_port(server_address)
-    logging.info(f"Replica server running on port {port} with DB file {db.db_file}...")
+    logging.info(
+        f"Replica server (ID={REPLICA_ID}) running on port {port} with DB file {db.db_file}..."
+    )
+
+    election_manager = ElectionManager(
+        replica_addresses=["localhost:50052", "localhost:50053"],  # Example list
+        local_replica_id=REPLICA_ID,
+    )
+    # Start a background thread to monitor the leader.
+    election_thread = threading.Thread(
+        target=monitor_leader, args=(election_manager,), daemon=True
+    )
+    election_thread.start()
     server.start()
     server.wait_for_termination()
 
@@ -195,6 +235,11 @@ if __name__ == "__main__":
         default=None,
         help="Database file path (defaults to env var DB_FILE or replica_chat_app.db)",
     )
-
+    parser.add_argument(
+        "--replica-id",
+        type=int,
+        default=0,
+        help="Unique replica ID (e.g., 1, 2, 3, etc.)",
+    )
     args = parser.parse_args()
-    serve(port=args.port, db_file=args.db_file)
+    serve(port=args.port, db_file=args.db_file, replica_id=args.replica_id)

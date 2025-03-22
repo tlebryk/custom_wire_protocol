@@ -2,6 +2,13 @@ syntax = "proto3";
 
 package messaging.replica;
 
+message GetReplicaIDRequest {}
+
+message GetReplicaIDResponse {
+  int32 replica_id = 1;
+}
+
+  
 // A common response for write operations.
 message WriteOperationResponse {
   bool success = 1;

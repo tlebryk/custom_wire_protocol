@@ -67,7 +67,7 @@ class ChatApp(tk.Tk):
                 # Convert ReceivedMessage proto to dict.
                 msg_dict = {
                     "timestamp": received_msg.timestamp,
-                    "from": getattr(received_msg, "from"),
+                    "sender": getattr(received_msg, "sender"),
                     "message": received_msg.message,
                     "id": received_msg.id,
                 }
@@ -89,7 +89,7 @@ class ChatApp(tk.Tk):
                 for msg in response.messages:
                     msg_dict = {
                         "timestamp": msg.timestamp,
-                        "from": getattr(msg, "from"),
+                        "sender": getattr(msg, "sender"),
                         "message": msg.message,
                         "id": msg.id,
                     }
@@ -106,7 +106,7 @@ class ChatApp(tk.Tk):
                 for msg in response.messages:
                     msg_dict = {
                         "timestamp": msg.timestamp,
-                        "from": getattr(msg, "from"),
+                        "sender": getattr(msg, "sender"),
                         "message": msg.message,
                         "id": msg.id,
                     }
@@ -493,7 +493,7 @@ class MessagesContainer(tk.Frame):
                 msg_text = frame.winfo_children()[0].cget("text")
                 message_data = {
                     "id": msg_id,
-                    "from": msg_text.split(" ")[1] if " " in msg_text else "",
+                    "sender": msg_text.split(" ")[1] if " " in msg_text else "",
                     "timestamp": (
                         msg_text.split(" at ")[1].split(":")[0]
                         if " at " in msg_text
@@ -536,7 +536,7 @@ class MessagesContainer(tk.Frame):
         unread messages dictionary.
         """
         msg_id = message_data.get("id")
-        sender = message_data.get("from")
+        sender = message_data.get("sender")
         timestamp = message_data.get("timestamp")
         message = message_data.get("message")
         if not msg_id:
@@ -618,7 +618,7 @@ class MessagesContainer(tk.Frame):
                 message_content = msg_text
             message_data = {
                 "id": msg_id,
-                "from": sender,
+                "sender": sender,
                 "timestamp": timestamp,
                 "message": message_content,
             }
@@ -645,7 +645,7 @@ class MessagesContainer(tk.Frame):
             None
         """
         msg_id = message_data.get("id")
-        sender = message_data.get("from")
+        sender = message_data.get("sender")
         timestamp = message_data.get("timestamp")
         message = message_data.get("message")
         if not msg_id:

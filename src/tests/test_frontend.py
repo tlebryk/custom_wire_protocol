@@ -43,7 +43,7 @@ class FakeGRPCClient:
         # Return a dummy recent message
         msg = SimpleNamespace(
             timestamp="2025-02-25T12:00:00.000000+0000",
-            **{"from": "alice", "message": "hello", "id": 1},
+            **{sender: "alice", "message": "hello", "id": 1},
         )
 
         class Dummy:
@@ -55,7 +55,7 @@ class FakeGRPCClient:
     def get_unread_messages(self, username):
         msg = SimpleNamespace(
             timestamp="2025-02-25T12:00:00.000000+0000",
-            **{"from": "bob", "message": "hi", "id": 2},
+            **{sender: "bob", "message": "hi", "id": 2},
         )
 
         class Dummy:
@@ -222,7 +222,7 @@ def test_mark_message_as_read(app, fake_messagebox):
     # Create a dummy unread message and add it to the messages container.
     dummy_msg = {
         "timestamp": "2025-02-25T12:00:00.000000+0000",
-        "from": "bob",
+        sender: "bob",
         "message": "Test unread message",
         "id": 999,
     }

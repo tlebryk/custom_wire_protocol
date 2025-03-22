@@ -173,7 +173,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
 
             received_msg = protocols_pb2.ReceivedMessage(
                 message=request.message,
-                from_=sender,
+                sender=sender,
                 timestamp=timestamp,
                 read="false",
                 id=message_id,
@@ -226,7 +226,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             recent_tuples = self.db.get_recent_messages(request.username, limit=50)
             messages = [
                 protocols_pb2.ChatMessage(
-                    message=t[1], timestamp=t[3], from_=t[0], id=t[4]
+                    message=t[1], timestamp=t[3], sender=t[0], id=t[4]
                 )
                 for t in recent_tuples
             ]
@@ -243,7 +243,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
             unread_tuples = self.db.get_unread_messages(request.username, limit=50)
             messages = [
                 protocols_pb2.ChatMessage(
-                    message=t[2], timestamp=t[3], from_=t[1], id=t[0]
+                    message=t[2], timestamp=t[3], sender=t[1], id=t[0]
                 )
                 for t in unread_tuples
             ]
@@ -384,7 +384,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                     msg_id, sender, content, timestamp = tup
                     received_msg = protocols_pb2.ReceivedMessage(
                         message=content,
-                        from_=sender,  # Note: use 'from_' to match the proto field name
+                        sender=sender,  # Note: use 'sender' to match the proto field name
                         timestamp=timestamp,
                         read="false",
                         id=int(msg_id),

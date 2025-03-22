@@ -45,7 +45,7 @@ def test_send_message_success(client):
         **{
             "message": "Hello",
             "status": "success",
-            "from": "testuser",
+            sender: "testuser",
             "timestamp": "2025-01-01T00:00:00Z",
         }
     )
@@ -64,7 +64,7 @@ def test_get_recent_messages(client):
         **{
             "message": "Recent",
             "timestamp": "2025-01-01T00:00:00Z",
-            "from": "otheruser",
+            sender: "otheruser",
             "id": 1,
         }
     )
@@ -84,7 +84,7 @@ def test_get_unread_messages(client):
         **{
             "message": "Unread",
             "timestamp": "2025-01-01T00:00:00Z",
-            "from": "otheruser",
+            sender: "otheruser",
             "id": 2,
         }
     )
@@ -146,7 +146,7 @@ def test_delete_account(client):
 def test_subscribe(client):
     dummy_msg1 = protocols_pb2.ReceivedMessage(
         **{
-            "from": "otheruser",
+            sender: "otheruser",
             "message": "Hi",
             "timestamp": "2025-01-01T00:00:00Z",
             "read": "false",
@@ -156,7 +156,7 @@ def test_subscribe(client):
     )
     dummy_msg2 = protocols_pb2.ReceivedMessage(
         **{
-            "from": "otheruser",
+            sender: "otheruser",
             "message": "How are you?",
             "timestamp": "2025-01-01T00:01:00Z",
             "read": "false",

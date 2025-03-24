@@ -41,9 +41,9 @@ src/
 
 ```bash
 # cd src
-docker-compose up -d 
+docker-compose up --build -d    
 ```
-
+docker-compose
 To test killing and individual service
 
 ```bash
@@ -64,7 +64,7 @@ docker-compose down
 
 #### Option 2: individual docker containers 
 ```bash
-docker build -t chat-app src
+docker build -t chat-server src
 docker run -d --name chat-server -p 50051:50051 -e DB_FILE=/data/chat_app.db -v $(pwd)/data/server:/data chat-app python server.py --port 50051 --replicas replica1:50052,replica2:50053
 docker run -d --name chat-replica1 -p 50052:50052 -e DB_FILE=/data/replica1_chat_app1.db -v $(pwd)/data/replica1:/data chat-app python replica_server.py --port 50052 --replica-id 1
 docker run -d --name chat-replica2 -p 50053:50053 -e DB_FILE=/data/replica2_chat_app2.db -v $(pwd)/data/replica2:/data chat-app python replica_server.py --port 50053 --replica-id 2
@@ -74,9 +74,12 @@ docker run -d --name chat-replica2 -p 50053:50053 -e DB_FILE=/data/replica2_chat
 Run the following command to start the backend server:
 
 ```bash
-python src/server.py --port 50051:50051 --replicas replica1:50052,replica2:50053
-python src/replica_server.py --port 50052:50052 -e DB_FILE=/data/replica1_chat_app1.db --replica-id 1
-python src/replica_server.py --port 50053:50053 -e DB_FILE=/data/replica1_chat_app2.db --replica-id 2
+# Then start the main server, using localhost for replica addresses
+python src/server.py --port 50051 --replicas localhost:50052,localhost:50053
+# Start the replica servers first
+python src/replica_server.py --port 50052 --db-file replica1_chat_app1.db --replica-id 1
+python src/replica_server.py --port 50053 --db-file replica1_chat_app2.db --replica-id 2
+
 
 ```
 

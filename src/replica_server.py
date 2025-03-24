@@ -210,15 +210,15 @@ def serve(port="50052", db_file=None, replica_id=0):
         f"Replica server (ID={REPLICA_ID}) running on port {port} with DB file {db.db_file}..."
     )
 
-    election_manager = ElectionManager(
-        replica_addresses=["localhost:50052", "localhost:50053"],  # Example list
-        local_replica_id=REPLICA_ID,
-    )
-    # Start a background thread to monitor the leader.
-    election_thread = threading.Thread(
-        target=monitor_leader, args=(election_manager,), daemon=True
-    )
-    election_thread.start()
+    # election_manager = ElectionManager(
+    #     replica_addresses=["localhost:50052", "localhost:50053"],  # Example list
+    #     local_replica_id=REPLICA_ID,
+    # )
+    # # Start a background thread to monitor the leader.
+    # election_thread = threading.Thread(
+    #     target=monitor_leader, args=(election_manager,), daemon=True
+    # )
+    # election_thread.start()
     server.start()
     server.wait_for_termination()
 

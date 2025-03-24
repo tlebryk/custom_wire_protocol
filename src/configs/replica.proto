@@ -64,4 +64,5 @@ service ReplicaService {
   rpc MarkMessagesAsRead(MarkMessagesAsReadRequest) returns (WriteOperationResponse);
   rpc SetNUnreadMessages(SetNUnreadMessagesRequest) returns (WriteOperationResponse);
   rpc DeleteMessage(DeleteMessageRequest) returns (WriteOperationResponse);
+  rpc GetReplicaID(GetReplicaIDRequest) returns (GetReplicaIDResponse);
 }

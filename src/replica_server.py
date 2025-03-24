@@ -2,6 +2,7 @@
 import os
 import argparse
 from concurrent import futures
+import sys
 import grpc
 import logging
 
@@ -27,25 +28,99 @@ db = Database(replica_db_file)
 # Create a UserManager instance for user operations
 user_manager = UserManager(replica_db_file)
 
+# Global variable to track heartbeat status
+LAST_HEARTBEAT_TIME = time.time()
+LEADER_TIMEOUT_SECS = 10
+
+
+# add logic to check if leader is down
+# def monitor_leader(election_manager, check_interval=10):
+#     while True:
+#         # This is where you would normally detect the leader is down.
+#         # For simplicity, assume we decide to run an election every check_interval seconds.
+#         if election_manager.elect_leader():
+#             # Transition to leader mode.
+#             logger.info("Transitioning to leader mode.")
+#             # For example, you might stop the current server and re-run leader code:
+#             # shutdown current gRPC server and launch the leader service (e.g., server.py)
+#             # Alternatively, set a flag that switches request handling.
+#             # Here we'll just log it.
+#             break
+#         else:
+#             logger.info("Leader election check: still not leader.")
+#         time.sleep(check_interval)
+
+def transition_to_leader_mode():
+    """
+    Transition the current replica process to leader mode
+    
+    Shuts down the replica services and starts the leader services
+    by replacing the current process with server.py
+    """
+    logger.info("Transitioning to leader mode: shutting down replica services and starting leader services.")
+    
+    # Get the current Python executable
+    python_executable = sys.executable
+
+    # Determine the current directory 
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # builg the full path to server.py (leader code)
+    leader_script = os.path.join(current_dir, "server.py")
+    
+    # need help editing these to gracefully transition to new leader
+
+    new_args = [
+        python_executable, 
+        leader_script,
+        "--port", "50051",
+        "--replicas", "localhost:50052,localhost:50053"
+    ]
+    
+    logger.info(f"Executing leader mode with command: {new_args}")
+    
+    # Replace the current process with the leader process.
+    os.execv(python_executable, new_args)
+
+
 
 def monitor_leader(election_manager, check_interval=10):
+    """
+    Runs in the background to check if the leader is alive.
+    If we haven't received a heartbeat for too long, we start an election.
+    If election_manager.elect_leader() returns True, this replica becomes the leader.
+    """
+    global LAST_HEARTBEAT_TIME
+
     while True:
-        # This is where you would normally detect the leader is down.
-        # For simplicity, assume we decide to run an election every check_interval seconds.
-        if election_manager.elect_leader():
-            # Transition to leader mode.
-            logger.info("Transitioning to leader mode.")
-            # For example, you might stop the current server and re-run leader code:
-            # shutdown current gRPC server and launch the leader service (e.g., server.py)
-            # Alternatively, set a flag that switches request handling.
-            # Here we'll just log it.
-            break
-        else:
-            logger.info("Leader election check: still not leader.")
+        elapsed = time.time() - LAST_HEARTBEAT_TIME
+        if elapsed > LEADER_TIMEOUT_SECS:
+            logger.warning("No heartbeat from leader. Starting leader election...")
+            # election_manager.elect_leader() returns True if this replica should become leader.
+            if election_manager.elect_leader():
+                logger.info("I have been elected as the new leader!")
+                transition_to_leader_mode()
+                break  # Exit the monitor loop once we transition to leader mode.
+            else:
+                logger.info("Leader election check: still not leader.")
+            # Reset LAST_HEARTBEAT_TIME so we don't keep re-triggering elections immediately.
+            LAST_HEARTBEAT_TIME = time.time()
         time.sleep(check_interval)
 
 
+
+
 class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
+
+    def Heartbeat(self, request, context):
+        """
+        Called by the leader to indicate it's alive.
+        """
+        global LAST_HEARTBEAT_TIME
+        LAST_HEARTBEAT_TIME = time.time()  # Update global variable
+        logger.info(f"Heartbeat received from leader {request.leader_id}")
+        return replica_pb2.HeartbeatResponse(message="OK")
+
     def RegisterUser(self, request, context):
         logger.info(f"Replica: RegisterUser called for {request.username}")
         try:
@@ -210,15 +285,15 @@ def serve(port="50052", db_file=None, replica_id=0):
         f"Replica server (ID={REPLICA_ID}) running on port {port} with DB file {db.db_file}..."
     )
 
-    # election_manager = ElectionManager(
-    #     replica_addresses=["localhost:50052", "localhost:50053"],  # Example list
-    #     local_replica_id=REPLICA_ID,
-    # )
-    # # Start a background thread to monitor the leader.
-    # election_thread = threading.Thread(
-    #     target=monitor_leader, args=(election_manager,), daemon=True
-    # )
-    # election_thread.start()
+    election_manager = ElectionManager(
+         replica_addresses=["localhost:50052", "localhost:50053"],  # Example list
+         local_replica_id=REPLICA_ID,
+     )
+    #Start a background thread to monitor the leader.
+    election_thread = threading.Thread(
+         target=monitor_leader, args=(election_manager,), daemon=True
+     )
+    election_thread.start()
     server.start()
     server.wait_for_termination()
 

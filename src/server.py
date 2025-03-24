@@ -11,11 +11,15 @@ import grpc
 
 import protocols_pb2
 import protocols_pb2_grpc
+import replica_pb2
+import replica_pb2_grpc
 from database import Database
 from logger import setup_logger
 from replication_manager import ReplicationManager  # Import the new ReplicationManager
 from server_intercepter import SizeLoggingServerInterceptor
 from users import UserManager
+
+
 
 # Set up logger for the server
 logger = setup_logger("server")
@@ -428,20 +432,54 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 message="Failed to set number of unread messages.", status="error"
             )
 
+def send_heartbeats(replica_addresses):
+    """
+    Periodically send heartbeats to all replicas.
+    Waits for the channel to be ready before sending.
+    If a replica is not ready, it logs a warning and continues.
+    """
+    while True:
+        for replica_addr in replica_addresses:
+            channel = grpc.insecure_channel(replica_addr)
+            try:
+                # Wait up to 2 seconds for the channel to be ready
+                grpc.channel_ready_future(channel).result(timeout=2.0)
+                stub = replica_pb2_grpc.ReplicaServiceStub(channel)
+                request = replica_pb2.HeartbeatRequest(leader_id="Leader-50051")
+                response = stub.Heartbeat(request, timeout=2.0)
+                logger.info(f"Sent heartbeat to replica {replica_addr}. Response: {response.message}")
+            except grpc.FutureTimeoutError:
+                logger.warning(f"Replica {replica_addr} is down and is not receiving heartbeats.")
+            except Exception as e:
+                logger.warning(f"Failed to send heartbeat to replica {replica_addr}: {e}")
+            finally:
+                channel.close()
+        time.sleep(3)
 
 def serve(port="50051", replica_addresses=None):
-    """Start the gRPC server."""
+    """
+    Start the gRPC server, plus start the heartbeat thread to notify replicas.
+    """
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
 
-    # Pass replica addresses to the service
     messaging_service = MessagingServiceServicer(replica_addresses=replica_addresses)
-
     protocols_pb2_grpc.add_MessagingServiceServicer_to_server(messaging_service, server)
     server_address = f"[::]:{port}"
     server.add_insecure_port(server_address)
-    logger.info(f"gRPC server running on port {port}...")
+
+    logger.info(f"gRPC leader server running on port {port}...")
+
+    # start the background heartbeat thread
+    heartbeat_thread = threading.Thread(
+        target=send_heartbeats, 
+        args=(replica_addresses,),
+        daemon=True
+    )
+    heartbeat_thread.start()
+
     server.start()
     server.wait_for_termination()
+
 
 
 if __name__ == "__main__":

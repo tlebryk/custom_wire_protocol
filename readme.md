@@ -79,7 +79,7 @@ python src/server.py --port 50051 --replicas localhost:50052,localhost:50053
 # Start the replica servers first
 python src/replica_server.py --port 50052 --db-file replica1_chat_app1.db --replica-id 1
 python src/replica_server.py --port 50053 --db-file replica1_chat_app2.db --replica-id 2
-
+# can add other replicas if needed
 
 ```
 

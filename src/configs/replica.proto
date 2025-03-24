@@ -55,6 +55,17 @@ message DeleteMessageRequest {
   int32 message_id = 1;
 }
 
+
+// Request heartbeat message from leader server
+message HeartbeatRequest {
+    string leader_id = 1;
+}
+
+message HeartbeatResponse {
+    string message = 1;
+}
+
+
 // ReplicaService for propagating write operations.
 service ReplicaService {
   rpc RegisterUser(RegisterUserRequest) returns (WriteOperationResponse);
@@ -65,4 +76,5 @@ service ReplicaService {
   rpc SetNUnreadMessages(SetNUnreadMessagesRequest) returns (WriteOperationResponse);
   rpc DeleteMessage(DeleteMessageRequest) returns (WriteOperationResponse);
   rpc GetReplicaID(GetReplicaIDRequest) returns (GetReplicaIDResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
 }

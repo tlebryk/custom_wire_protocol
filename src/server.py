@@ -516,4 +516,4 @@ if __name__ == "__main__":
         args.replicas.split(",") if args.replicas else ["localhost:50052"]
     )
 
-    serve(port=args.port, replica_addresses=replica_addresses)
+    serve(host=args.host, port=args.port, replica_addresses=replica_addresses)

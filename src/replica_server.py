@@ -325,4 +325,6 @@ if __name__ == "__main__":
         help="Unique replica ID (e.g., 1, 2, 3, etc.)",
     )
     args = parser.parse_args()
-    serve(port=args.port, db_file=args.db_file, replica_id=args.replica_id)
+    serve(
+        host=args.host, port=args.port, db_file=args.db_file, replica_id=args.replica_id
+    )

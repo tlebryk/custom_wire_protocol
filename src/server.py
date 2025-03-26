@@ -493,7 +493,7 @@ def serve(host="0.0.0.0", port="50051", replica_addresses=None):
             time.sleep(1)
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt received, stopping server...")
-        server.stop(0)
+        server.stop(1)
 
 
 if __name__ == "__main__":

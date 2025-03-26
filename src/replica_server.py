@@ -325,7 +325,17 @@ if __name__ == "__main__":
         default=0,
         help="Unique replica ID (e.g., 1, 2, 3, etc.)",
     )
+    parser.add_argument(
+        "--replicas",
+        type=str,
+        default="localhost:50052",
+        help="Comma-separated list of replica addresses",
+    )
     args = parser.parse_args()
     serve(
-        host=args.host, port=args.port, db_file=args.db_file, replica_id=args.replica_id
+        host=args.host,
+        port=args.port,
+        db_file=args.db_file,
+        replica_id=args.replica_id,
+        replica_addresses=args.replicas,
     )

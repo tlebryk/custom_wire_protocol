@@ -258,26 +258,41 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
         return replica_pb2.GetReplicaIDResponse(replica_id=REPLICA_ID)
 
 
-def serve(port="50052", db_file=None, replica_id=0):
-    global REPLICA_ID, db, user_manager
+def serve(
+    host="0.0.0.0", port="50052", db_file=None, replica_id=0, replica_addresses=None
+):
+    global REPLICA_ID, db, user_manager, ALL_REPLICA_ADDRESSES, LOCAL_ADDRESS
     REPLICA_ID = replica_id  # Save the replica ID.
+
+    # Set local address
+    LOCAL_ADDRESS = f"{host}:{port}"
+
     # (Re)initialize database and user_manager if needed.
     if db_file:
         db = Database(db_file)
         user_manager = UserManager(db_file)
 
+    # Store the list of all replicas including their IP addresses
+    if replica_addresses:
+        ALL_REPLICA_ADDRESSES = replica_addresses
+    else:
+        ALL_REPLICA_ADDRESSES = [
+            "localhost:50052",
+            "localhost:50053",
+        ]  # Default for local testing
+
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     replica_pb2_grpc.add_ReplicaServiceServicer_to_server(
         ReplicaServiceServicer(), server
     )
-    server_address = f"[::]:{port}"
+    server_address = f"{host}:{port}"
     server.add_insecure_port(server_address)
     logger.info(
-        f"Replica server (ID={REPLICA_ID}) running on port {port} with DB file {db.db_file}..."
+        f"Replica server (ID={REPLICA_ID}) running on {server_address} with DB file {db.db_file}..."
     )
 
     election_manager = ElectionManager(
-        replica_addresses=["localhost:50052", "localhost:50053"],  # Example list
+        replica_addresses=ALL_REPLICA_ADDRESSES,
         local_replica_id=REPLICA_ID,
     )
     # Start a background thread to monitor the leader.
@@ -291,6 +306,9 @@ def serve(port="50052", db_file=None, replica_id=0):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Start the replica server")
+    parser.add_argument(
+        "--host", type=str, default="0.0.0.0", help="Host IP address to bind to"
+    )
     parser.add_argument(
         "--port", type=str, default="50052", help="Port to run the replica on"
     )

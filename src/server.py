@@ -463,18 +463,23 @@ def send_heartbeats(replica_addresses):
         time.sleep(3)
 
 
-def serve(port="50051", replica_addresses=None):
+def serve(host="0.0.0.0", port="50051", replica_addresses=None):
     """
     Start the gRPC server, plus start the heartbeat thread to notify replicas.
+
+    Args:
+        host (str): The host IP address to bind to. Default is "0.0.0.0" (all interfaces).
+        port (str): The port to bind to. Default is "50051".
+        replica_addresses (list): List of replica addresses to communicate with.
     """
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
 
     messaging_service = MessagingServiceServicer(replica_addresses=replica_addresses)
     protocols_pb2_grpc.add_MessagingServiceServicer_to_server(messaging_service, server)
-    server_address = f"[::]:{port}"
+    server_address = f"{host}:{port}"
     server.add_insecure_port(server_address)
 
-    logger.info(f"gRPC leader server running on port {port}...")
+    logger.info(f"gRPC leader server running on {server_address}...")
 
     # start the background heartbeat thread
     heartbeat_thread = threading.Thread(
@@ -493,6 +498,9 @@ def serve(port="50051", replica_addresses=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Start the messaging server")
+    parser.add_argument(
+        "--host", type=str, default="0.0.0.0", help="Host IP address to bind to"
+    )
     parser.add_argument(
         "--port", type=str, default="50051", help="Port to run the server on"
     )

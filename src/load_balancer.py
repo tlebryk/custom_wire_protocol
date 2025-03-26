@@ -154,8 +154,13 @@ def serve_load_balancer(
     lb_host="0.0.0.0", lb_port="50051", replica_endpoints=None, intercept=False
 ):
     """
-    Starts the load balancer service on the given host/port.
-    replica_endpoints: Comma-separated list of replica addresses (for leader discovery).
+    Starts the load balancer service on the specified host and port.
+
+    Args:
+        lb_host (str): Host IP address to bind to.
+        lb_port (str): Port to run the load balancer on.
+        replica_endpoints (list of str): List of replica addresses for leader discovery.
+        intercept (bool): Whether to use interceptors for gRPC channels.
     """
     if replica_endpoints is None:
         replica_endpoints = ["localhost:50052"]

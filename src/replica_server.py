@@ -1,3 +1,31 @@
+"""
+Replica Server Module
+
+This module implements the replica server for the fault-tolerant messaging system.
+It handles incoming gRPC requests from clients and the leader (e.g., heartbeats),
+and participates in leader election. The server can transition into leader mode
+if elected.
+
+Global Variables:
+    REPLICA_ID (int): Unique identifier for this replica.
+    CURRENT_LEADER_ADDRESS (str): Full address (e.g., "10.250.164.247:50051") of the current leader.
+    SERVER (grpc.Server): Global gRPC server instance.
+    RUNNING_MODE (str): "replica" or "leader" indicating the current mode.
+    HEARTBEAT_THREAD (Thread): Global heartbeat thread reference.
+    LEADER_PORT (str): Default port for leader services (can be overridden).
+    EXTERNAL_HOST (str): External hostname/IP advertised to clients.
+    replica_db_file (str): Path to the replica's database file.
+    db (Database): Instance of the Database class.
+    user_manager (UserManager): Instance for user operations.
+    LAST_HEARTBEAT_TIME (float): Timestamp of the last received heartbeat.
+    LEADER_TIMEOUT_SECS (int): Number of seconds to wait before considering the leader failed.
+    ALL_REPLICA_ADDRESSES (list): List of all replica addresses.
+    LOCAL_ADDRESS (str): The address of this replica server.
+    LEADER_ADDRESS (str): The leader's address once elected.
+    SHOULD_KEEP_RUNNING (bool): Control flag for the main server loop.
+"""
+
+
 # replica_server.py
 import os
 import argparse
@@ -48,7 +76,15 @@ SHOULD_KEEP_RUNNING = True  # Control flag for main loop
 
 def send_heartbeats(replica_addresses):
     """
-    Periodically send heartbeats to all replicas.
+    Periodically sends heartbeat messages to all replicas.
+
+    This function runs in a loop as long as the server is in leader mode and
+    SHOULD_KEEP_RUNNING is True. For each replica in the provided list, it sends
+    a heartbeat message containing the leader's address. Heartbeat messages help
+    replicas detect that the leader is alive for client redirection.
+
+    Args:
+        replica_addresses (list of str): List of replica addresses to send heartbeats to.
     """
     global RUNNING_MODE, LEADER_ADDRESS
     
@@ -93,6 +129,10 @@ def send_heartbeats(replica_addresses):
 class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
     """
     Implementation of the replica service.
+
+    This class handles RPC calls from the leader (e.g., heartbeats) and
+    client requests for operations such as user registration, message insertion,
+    and account deletion.
     """
 
     def GetLeader(self, request, context):
@@ -135,6 +175,19 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
         return replica_pb2.HeartbeatResponse(message="OK")
 
     def RegisterUser(self, request, context):
+        """
+        Registers a new user on the replica.
+
+        Uses the UserManager to register the user. If successful, returns a success response;
+        otherwise, returns an error response with details.
+
+        Args:
+            request: A RegisterUserRequest containing the username and password.
+            context: gRPC context.
+
+        Returns:
+            replica_pb2.WriteOperationResponse: Response indicating success or failure.
+        """
         logger.info(f"Replica: RegisterUser called for {request.username}")
         try:
             # Use UserManager to register the user
@@ -162,6 +215,19 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             )
 
     def DeleteAccount(self, request, context):
+        """
+        Deletes a user account from the replica.
+
+        Uses the UserManager to delete the account. Returns a success response if deletion
+        is successful; otherwise, returns an error response.
+
+        Args:
+            request: A DeleteAccountRequest with the username.
+            context: gRPC context.
+
+        Returns:
+            replica_pb2.WriteOperationResponse: Response indicating the outcome.
+        """
         logger.info(f"Replica: DeleteAccount called for {request.username}")
         try:
             # Use UserManager to delete the account
@@ -186,6 +252,16 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             )
 
     def InsertMessage(self, request, context):
+        """
+        Inserts a new message into the replica's database.
+
+        Args:
+            request: An InsertMessageRequest containing the sender, content, and receiver.
+            context: gRPC context.
+
+        Returns:
+            replica_pb2.WriteOperationResponse: Response indicating success or failure.
+        """
         logger.info(f"Replica: InsertMessage called for message from {request.sender}")
         try:
             message_id = db.insert_message(
@@ -203,6 +279,16 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             )
 
     def MarkMessagesDelivered(self, request, context):
+        """
+        Marks messages as delivered for a given user.
+
+        Args:
+            request: A MarkMessagesDeliveredRequest containing the user ID.
+            context: gRPC context.
+
+        Returns:
+            replica_pb2.WriteOperationResponse: Response indicating success or failure.
+        """
         logger.info(f"Replica: MarkMessagesDelivered called for user {request.user_id}")
         try:
             db.mark_messages_delivered(request.user_id)
@@ -218,6 +304,16 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             )
 
     def MarkMessagesAsRead(self, request, context):
+        """
+        Marks a list of messages as read.
+
+        Args:
+            request: A MarkMessagesAsReadRequest containing a list of message IDs.
+            context: gRPC context.
+
+        Returns:
+            replica_pb2.WriteOperationResponse: Response indicating success or failure.
+        """
         logger.info(
             f"Replica: MarkMessagesAsRead called for messages {request.message_ids}"
         )
@@ -235,6 +331,16 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             )
 
     def SetNUnreadMessages(self, request, context):
+        """
+        Sets the number of unread messages for a user.
+
+        Args:
+            request: A SetNUnreadMessagesRequest with the username and desired unread message count.
+            context: gRPC context.
+
+        Returns:
+            replica_pb2.WriteOperationResponse: Response indicating success or failure.
+        """
         logger.info(f"Replica: SetNUnreadMessages called for user {request.username}")
         try:
             result = db.set_n_unread_messages(
@@ -255,6 +361,16 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
             )
 
     def DeleteMessage(self, request, context):
+        """
+        Deletes a message from the replica's database.
+
+        Args:
+            request: A DeleteMessageRequest containing the message ID.
+            context: gRPC context.
+
+        Returns:
+            replica_pb2.WriteOperationResponse: Response indicating success or failure.
+        """
         logger.info(
             f"Replica: DeleteMessage called for message ID {request.message_id}"
         )

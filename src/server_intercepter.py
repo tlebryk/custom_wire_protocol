@@ -4,6 +4,11 @@ import logging
 
 
 class SizeLoggingServerInterceptor(grpc.ServerInterceptor):
+    """
+    A gRPC server interceptor that logs the sizes of incoming requests and outgoing responses.
+
+    This is useful for monitoring payload sizes for debugging and analyzing performance
+    """
     def intercept_service(self, continuation, handler_call_details):
         handler = continuation(handler_call_details)
         if handler is None:

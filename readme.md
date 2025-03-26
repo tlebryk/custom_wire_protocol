@@ -23,13 +23,26 @@ This repository contains a basic server, a graphical client interface, and to cr
 
 ```plaintext
 src/
-├── server.py               # Main server ensuring TCP connections for WebSocket communication.
-├── users.py                # Extra password & account handling. 
-├── database.py             # Persistent storage for users and messages.
-├── frontend.py             # GUI application using Tkinter; supports chat functionality.
-├── client.py               # Frontend gRPC client.
-├── protocols_pb2_grpc.py   # Contains gRPC service definitions.
-├── protocols_pb2.py        # Contains the serialized message structures.
+├── server.py                       # Main server ensuring TCP connections for WebSocket communication
+├── replica_server.py               # Server implementation for replicas in the distributed system
+├── users.py                        # Extra password & account handling
+├── database.py                     # Persistent storage for users and messages
+├── frontend.py                     # GUI application using Tkinter; supports chat functionality
+├── client.py                       # Frontend gRPC client
+├── load_balancer.py                # Distributes client requests across multiple server replicas
+├── replication_manager.py          # Manages data replication between primary and replica servers
+├── election_manager.py             # Handles leader election among replicas when primary fails
+├── messaging_service_servicer.py   # Implements the gRPC service for messaging functionality
+├── server_intercepter.py           # Intercepts gRPC calls for additional processing
+├── logger.py                       # Logging utility for the application
+├── clearport.py                    # Utility script to clear ports that might be in use
+├── protocols_pb2_grpc.py           # Contains gRPC service definitions (generated)
+├── protocols_pb2.py                # Contains the serialized message structures (generated)
+├── replica_pb2_grpc.py             # Contains gRPC service definitions for replicas (generated)
+├── replica_pb2.py                  # Contains the serialized message structures for replicas (generated)
+├── configs/                        # Directory containing configuration files
+│   ├── protocols.proto             # Protocol Buffer definition for main service
+│   └── replica.proto               # Protocol Buffer definition for replica communication
 
 ```
 

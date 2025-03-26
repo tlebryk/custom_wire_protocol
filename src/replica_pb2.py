@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rreplica.proto\x12\x11messaging.replica\"\x15\n\x13GetReplicaIDRequest\"*\n\x14GetReplicaIDResponse\x12\x12\n\nreplica_id\x18\x01 \x01(\x05\":\n\x16WriteOperationResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"9\n\x13RegisterUserRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"(\n\x14\x44\x65leteAccountRequest\x12\x10\n\x08username\x18\x01 \x01(\t\"\\\n\x14InsertMessageRequest\x12\x0e\n\x06sender\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\t\x12\x10\n\x08receiver\x18\x03 \x01(\t\x12\x11\n\ttimestamp\x18\x04 \x01(\t\"/\n\x1cMarkMessagesDeliveredRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"0\n\x19MarkMessagesAsReadRequest\x12\x13\n\x0bmessage_ids\x18\x01 \x03(\x05\"H\n\x19SetNUnreadMessagesRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x19\n\x11n_unread_messages\x18\x02 \x01(\x05\"*\n\x14\x44\x65leteMessageRequest\x12\x12\n\nmessage_id\x18\x01 \x01(\x05\"%\n\x10HeartbeatRequest\x12\x11\n\tleader_id\x18\x01 \x01(\t\"$\n\x11HeartbeatResponse\x12\x0f\n\x07message\x18\x01 \x01(\t2\xae\x07\n\x0eReplicaService\x12\x61\n\x0cRegisterUser\x12&.messaging.replica.RegisterUserRequest\x1a).messaging.replica.WriteOperationResponse\x12\x63\n\rDeleteAccount\x12\'.messaging.replica.DeleteAccountRequest\x1a).messaging.replica.WriteOperationResponse\x12\x63\n\rInsertMessage\x12\'.messaging.replica.InsertMessageRequest\x1a).messaging.replica.WriteOperationResponse\x12s\n\x15MarkMessagesDelivered\x12/.messaging.replica.MarkMessagesDeliveredRequest\x1a).messaging.replica.WriteOperationResponse\x12m\n\x12MarkMessagesAsRead\x12,.messaging.replica.MarkMessagesAsReadRequest\x1a).messaging.replica.WriteOperationResponse\x12m\n\x12SetNUnreadMessages\x12,.messaging.replica.SetNUnreadMessagesRequest\x1a).messaging.replica.WriteOperationResponse\x12\x63\n\rDeleteMessage\x12\'.messaging.replica.DeleteMessageRequest\x1a).messaging.replica.WriteOperationResponse\x12_\n\x0cGetReplicaID\x12&.messaging.replica.GetReplicaIDRequest\x1a\'.messaging.replica.GetReplicaIDResponse\x12V\n\tHeartbeat\x12#.messaging.replica.HeartbeatRequest\x1a$.messaging.replica.HeartbeatResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rreplica.proto\x12\x11messaging.replica\"\x15\n\x13GetReplicaIDRequest\"*\n\x14GetReplicaIDResponse\x12\x12\n\nreplica_id\x18\x01 \x01(\x05\"\x12\n\x10GetLeaderRequest\"+\n\x11GetLeaderResponse\x12\x16\n\x0eleader_address\x18\x01 \x01(\t\":\n\x16WriteOperationResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"9\n\x13RegisterUserRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"(\n\x14\x44\x65leteAccountRequest\x12\x10\n\x08username\x18\x01 \x01(\t\"\\\n\x14InsertMessageRequest\x12\x0e\n\x06sender\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\t\x12\x10\n\x08receiver\x18\x03 \x01(\t\x12\x11\n\ttimestamp\x18\x04 \x01(\t\"/\n\x1cMarkMessagesDeliveredRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"0\n\x19MarkMessagesAsReadRequest\x12\x13\n\x0bmessage_ids\x18\x01 \x03(\x05\"H\n\x19SetNUnreadMessagesRequest\x12\x10\n\x08username\x18\x01 \x01(\t\x12\x19\n\x11n_unread_messages\x18\x02 \x01(\x05\"*\n\x14\x44\x65leteMessageRequest\x12\x12\n\nmessage_id\x18\x01 \x01(\x05\"%\n\x10HeartbeatRequest\x12\x11\n\tleader_id\x18\x01 \x01(\t\"$\n\x11HeartbeatResponse\x12\x0f\n\x07message\x18\x01 \x01(\t2\x86\x08\n\x0eReplicaService\x12\x61\n\x0cRegisterUser\x12&.messaging.replica.RegisterUserRequest\x1a).messaging.replica.WriteOperationResponse\x12\x63\n\rDeleteAccount\x12\'.messaging.replica.DeleteAccountRequest\x1a).messaging.replica.WriteOperationResponse\x12\x63\n\rInsertMessage\x12\'.messaging.replica.InsertMessageRequest\x1a).messaging.replica.WriteOperationResponse\x12s\n\x15MarkMessagesDelivered\x12/.messaging.replica.MarkMessagesDeliveredRequest\x1a).messaging.replica.WriteOperationResponse\x12m\n\x12MarkMessagesAsRead\x12,.messaging.replica.MarkMessagesAsReadRequest\x1a).messaging.replica.WriteOperationResponse\x12m\n\x12SetNUnreadMessages\x12,.messaging.replica.SetNUnreadMessagesRequest\x1a).messaging.replica.WriteOperationResponse\x12\x63\n\rDeleteMessage\x12\'.messaging.replica.DeleteMessageRequest\x1a).messaging.replica.WriteOperationResponse\x12_\n\x0cGetReplicaID\x12&.messaging.replica.GetReplicaIDRequest\x1a\'.messaging.replica.GetReplicaIDResponse\x12V\n\tHeartbeat\x12#.messaging.replica.HeartbeatRequest\x1a$.messaging.replica.HeartbeatResponse\x12V\n\tGetLeader\x12#.messaging.replica.GetLeaderRequest\x1a$.messaging.replica.GetLeaderResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,26 +35,30 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_GETREPLICAIDREQUEST']._serialized_end=57
   _globals['_GETREPLICAIDRESPONSE']._serialized_start=59
   _globals['_GETREPLICAIDRESPONSE']._serialized_end=101
-  _globals['_WRITEOPERATIONRESPONSE']._serialized_start=103
-  _globals['_WRITEOPERATIONRESPONSE']._serialized_end=161
-  _globals['_REGISTERUSERREQUEST']._serialized_start=163
-  _globals['_REGISTERUSERREQUEST']._serialized_end=220
-  _globals['_DELETEACCOUNTREQUEST']._serialized_start=222
-  _globals['_DELETEACCOUNTREQUEST']._serialized_end=262
-  _globals['_INSERTMESSAGEREQUEST']._serialized_start=264
-  _globals['_INSERTMESSAGEREQUEST']._serialized_end=356
-  _globals['_MARKMESSAGESDELIVEREDREQUEST']._serialized_start=358
-  _globals['_MARKMESSAGESDELIVEREDREQUEST']._serialized_end=405
-  _globals['_MARKMESSAGESASREADREQUEST']._serialized_start=407
-  _globals['_MARKMESSAGESASREADREQUEST']._serialized_end=455
-  _globals['_SETNUNREADMESSAGESREQUEST']._serialized_start=457
-  _globals['_SETNUNREADMESSAGESREQUEST']._serialized_end=529
-  _globals['_DELETEMESSAGEREQUEST']._serialized_start=531
-  _globals['_DELETEMESSAGEREQUEST']._serialized_end=573
-  _globals['_HEARTBEATREQUEST']._serialized_start=575
-  _globals['_HEARTBEATREQUEST']._serialized_end=612
-  _globals['_HEARTBEATRESPONSE']._serialized_start=614
-  _globals['_HEARTBEATRESPONSE']._serialized_end=650
-  _globals['_REPLICASERVICE']._serialized_start=653
-  _globals['_REPLICASERVICE']._serialized_end=1595
+  _globals['_GETLEADERREQUEST']._serialized_start=103
+  _globals['_GETLEADERREQUEST']._serialized_end=121
+  _globals['_GETLEADERRESPONSE']._serialized_start=123
+  _globals['_GETLEADERRESPONSE']._serialized_end=166
+  _globals['_WRITEOPERATIONRESPONSE']._serialized_start=168
+  _globals['_WRITEOPERATIONRESPONSE']._serialized_end=226
+  _globals['_REGISTERUSERREQUEST']._serialized_start=228
+  _globals['_REGISTERUSERREQUEST']._serialized_end=285
+  _globals['_DELETEACCOUNTREQUEST']._serialized_start=287
+  _globals['_DELETEACCOUNTREQUEST']._serialized_end=327
+  _globals['_INSERTMESSAGEREQUEST']._serialized_start=329
+  _globals['_INSERTMESSAGEREQUEST']._serialized_end=421
+  _globals['_MARKMESSAGESDELIVEREDREQUEST']._serialized_start=423
+  _globals['_MARKMESSAGESDELIVEREDREQUEST']._serialized_end=470
+  _globals['_MARKMESSAGESASREADREQUEST']._serialized_start=472
+  _globals['_MARKMESSAGESASREADREQUEST']._serialized_end=520
+  _globals['_SETNUNREADMESSAGESREQUEST']._serialized_start=522
+  _globals['_SETNUNREADMESSAGESREQUEST']._serialized_end=594
+  _globals['_DELETEMESSAGEREQUEST']._serialized_start=596
+  _globals['_DELETEMESSAGEREQUEST']._serialized_end=638
+  _globals['_HEARTBEATREQUEST']._serialized_start=640
+  _globals['_HEARTBEATREQUEST']._serialized_end=677
+  _globals['_HEARTBEATRESPONSE']._serialized_start=679
+  _globals['_HEARTBEATRESPONSE']._serialized_end=715
+  _globals['_REPLICASERVICE']._serialized_start=718
+  _globals['_REPLICASERVICE']._serialized_end=1748
 # @@protoc_insertion_point(module_scope)

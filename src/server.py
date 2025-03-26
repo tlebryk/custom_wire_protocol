@@ -20,7 +20,6 @@ from server_intercepter import SizeLoggingServerInterceptor
 from users import UserManager
 
 
-
 # Set up logger for the server
 logger = setup_logger("server")
 
@@ -432,6 +431,7 @@ class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
                 message="Failed to set number of unread messages.", status="error"
             )
 
+
 def send_heartbeats(replica_addresses):
     """
     Periodically send heartbeats to all replicas.
@@ -447,14 +447,21 @@ def send_heartbeats(replica_addresses):
                 stub = replica_pb2_grpc.ReplicaServiceStub(channel)
                 request = replica_pb2.HeartbeatRequest(leader_id="Leader-50051")
                 response = stub.Heartbeat(request, timeout=2.0)
-                logger.info(f"Sent heartbeat to replica {replica_addr}. Response: {response.message}")
+                logger.info(
+                    f"Sent heartbeat to replica {replica_addr}. Response: {response.message}"
+                )
             except grpc.FutureTimeoutError:
-                logger.warning(f"Replica {replica_addr} is down and is not receiving heartbeats.")
+                logger.warning(
+                    f"Replica {replica_addr} is down and is not receiving heartbeats."
+                )
             except Exception as e:
-                logger.warning(f"Failed to send heartbeat to replica {replica_addr}: {e}")
+                logger.warning(
+                    f"Failed to send heartbeat to replica {replica_addr}: {e}"
+                )
             finally:
                 channel.close()
         time.sleep(3)
+
 
 def serve(port="50051", replica_addresses=None):
     """
@@ -471,15 +478,17 @@ def serve(port="50051", replica_addresses=None):
 
     # start the background heartbeat thread
     heartbeat_thread = threading.Thread(
-        target=send_heartbeats, 
-        args=(replica_addresses,),
-        daemon=True
+        target=send_heartbeats, args=(replica_addresses,), daemon=True
     )
     heartbeat_thread.start()
 
     server.start()
-    server.wait_for_termination()
-
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("KeyboardInterrupt received, stopping server...")
+        server.stop(0)
 
 
 if __name__ == "__main__":

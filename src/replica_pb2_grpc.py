@@ -26,8 +26,7 @@ if _version_not_supported:
 
 
 class ReplicaServiceStub(object):
-    """ReplicaService for propagating write operations.
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -80,11 +79,15 @@ class ReplicaServiceStub(object):
                 request_serializer=replica__pb2.HeartbeatRequest.SerializeToString,
                 response_deserializer=replica__pb2.HeartbeatResponse.FromString,
                 _registered_method=True)
+        self.GetLeader = channel.unary_unary(
+                '/messaging.replica.ReplicaService/GetLeader',
+                request_serializer=replica__pb2.GetLeaderRequest.SerializeToString,
+                response_deserializer=replica__pb2.GetLeaderResponse.FromString,
+                _registered_method=True)
 
 
 class ReplicaServiceServicer(object):
-    """ReplicaService for propagating write operations.
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def RegisterUser(self, request, context):
         """Missing associated documentation comment in .proto file."""
@@ -140,6 +143,13 @@ class ReplicaServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetLeader(self, request, context):
+        """New: GetLeader RPC for redirecting clients.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ReplicaServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -188,6 +198,11 @@ def add_ReplicaServiceServicer_to_server(servicer, server):
                     request_deserializer=replica__pb2.HeartbeatRequest.FromString,
                     response_serializer=replica__pb2.HeartbeatResponse.SerializeToString,
             ),
+            'GetLeader': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetLeader,
+                    request_deserializer=replica__pb2.GetLeaderRequest.FromString,
+                    response_serializer=replica__pb2.GetLeaderResponse.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'messaging.replica.ReplicaService', rpc_method_handlers)
@@ -197,8 +212,7 @@ def add_ReplicaServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class ReplicaService(object):
-    """ReplicaService for propagating write operations.
-    """
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def RegisterUser(request,
@@ -433,6 +447,33 @@ class ReplicaService(object):
             '/messaging.replica.ReplicaService/Heartbeat',
             replica__pb2.HeartbeatRequest.SerializeToString,
             replica__pb2.HeartbeatResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetLeader(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/messaging.replica.ReplicaService/GetLeader',
+            replica__pb2.GetLeaderRequest.SerializeToString,
+            replica__pb2.GetLeaderResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -4,6 +4,7 @@ import logging
 import os
 import threading
 import time
+import socket
 from concurrent import futures
 from datetime import datetime
 
@@ -22,6 +23,10 @@ from users import UserManager
 
 # Set up logger for the server
 logger = setup_logger("server")
+
+# Global variables for server configuration
+EXTERNAL_HOST = None
+SERVER_PORT = "50051"
 
 
 class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
@@ -438,14 +443,27 @@ def send_heartbeats(replica_addresses):
     Waits for the channel to be ready before sending.
     If a replica is not ready, it logs a warning and continues.
     """
+    global EXTERNAL_HOST, SERVER_PORT
+
+    # Form the leader's complete address
+    leader_address = f"{EXTERNAL_HOST}:{SERVER_PORT}"
+    logger.info(f"Sending heartbeats as leader at {leader_address}")
+
     while True:
         for replica_addr in replica_addresses:
+            # Skip self if this address is our own address
+            if replica_addr == leader_address:
+                continue
+
             channel = grpc.insecure_channel(replica_addr)
             try:
                 # Wait up to 2 seconds for the channel to be ready
                 grpc.channel_ready_future(channel).result(timeout=2.0)
                 stub = replica_pb2_grpc.ReplicaServiceStub(channel)
-                request = replica_pb2.HeartbeatRequest(leader_id="Leader-50051")
+                
+                # Send the full leader address in the heartbeat
+                request = replica_pb2.HeartbeatRequest(leader_id=leader_address)
+                
                 response = stub.Heartbeat(request, timeout=2.0)
                 logger.info(
                     f"Sent heartbeat to replica {replica_addr}. Response: {response.message}"
@@ -463,7 +481,26 @@ def send_heartbeats(replica_addresses):
         time.sleep(3)
 
 
-def serve(host="0.0.0.0", port="50051", replica_addresses=None):
+def get_external_host(host):
+    """Determine the external host address to use for heartbeats and client connections."""
+    if host != "0.0.0.0" and host != "localhost" and host != "127.0.0.1":
+        # If a specific external IP was provided, use it
+        return host
+    
+    # Otherwise, try to determine the machine's IP address
+    try:
+        # This is a common way to get the local IP - connect to Google DNS and check what interface is used
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        # Fallback to hostname
+        return socket.gethostname()
+
+
+def serve(host="0.0.0.0", port="50051", replica_addresses=None, external_host=None):
     """
     Start the gRPC server, plus start the heartbeat thread to notify replicas.
 
@@ -471,7 +508,22 @@ def serve(host="0.0.0.0", port="50051", replica_addresses=None):
         host (str): The host IP address to bind to. Default is "0.0.0.0" (all interfaces).
         port (str): The port to bind to. Default is "50051".
         replica_addresses (list): List of replica addresses to communicate with.
+        external_host (str): External hostname/IP to advertise to clients and replicas.
     """
+    global EXTERNAL_HOST, SERVER_PORT
+    
+    # Set the port
+    SERVER_PORT = port
+    
+    # Determine the external host - crucial for client connectivity
+    if external_host:
+        EXTERNAL_HOST = external_host
+    else:
+        EXTERNAL_HOST = get_external_host(host)
+    
+    logger.info(f"Server binding to {host}:{port}")
+    logger.info(f"Using external host {EXTERNAL_HOST} for client connections")
+    
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
 
     messaging_service = MessagingServiceServicer(replica_addresses=replica_addresses)
@@ -481,9 +533,15 @@ def serve(host="0.0.0.0", port="50051", replica_addresses=None):
 
     logger.info(f"gRPC leader server running on {server_address}...")
 
+    # Convert replica_addresses to list if it's a string
+    if isinstance(replica_addresses, str):
+        replica_addrs_list = replica_addresses.split(",")
+    else:
+        replica_addrs_list = replica_addresses
+    
     # start the background heartbeat thread
     heartbeat_thread = threading.Thread(
-        target=send_heartbeats, args=(replica_addresses,), daemon=True
+        target=send_heartbeats, args=(replica_addrs_list,), daemon=True
     )
     heartbeat_thread.start()
 
@@ -510,10 +568,16 @@ if __name__ == "__main__":
         default="localhost:50052",
         help="Comma-separated list of replica addresses",
     )
+    parser.add_argument(
+        "--external-host",
+        type=str,
+        default=None,
+        help="External hostname/IP to advertise to clients (defaults to auto-detected)",
+    )
 
     args = parser.parse_args()
     replica_addresses = (
         args.replicas.split(",") if args.replicas else ["localhost:50052"]
     )
     print(f"{replica_addresses=}")
-    serve(host=args.host, port=args.port, replica_addresses=replica_addresses)
+    serve(host=args.host, port=args.port, replica_addresses=replica_addresses, external_host=args.external_host)

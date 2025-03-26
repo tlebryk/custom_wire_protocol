@@ -5,25 +5,27 @@ from concurrent import futures
 import sys
 import grpc
 import logging
+import importlib
+import threading
+import time
 
 import replica_pb2
 import replica_pb2_grpc
 from database import Database  # Import the Database class
 from users import UserManager  # Import the UserManager class
 
-import threading
 from election_manager import ElectionManager
 from logger import setup_logger
-import time
-
-# Instead of os.execv, use subprocess.Popen which handles spaces in paths better.
-import subprocess
 
 logger = setup_logger("server")
-# Global variable to store this replica's ID.
+
+# Global variables
 REPLICA_ID = None
 CURRENT_LEADER_ADDRESS = None
-
+SERVER = None  # Global server instance
+RUNNING_MODE = "replica"  # Can be "replica" or "leader"
+HEARTBEAT_THREAD = None  # Global heartbeat thread reference
+LEADER_PORT = "50051"  # Default leader port, can be overridden
 
 # Set the replica's DB file using the environment variable (or a default).
 replica_db_file = os.environ.get("DB_FILE", "replica_chat_app.db")
@@ -36,65 +38,59 @@ user_manager = UserManager(replica_db_file)
 LAST_HEARTBEAT_TIME = time.time()
 LEADER_TIMEOUT_SECS = 5
 
+# Configuration for replica and leader
+ALL_REPLICA_ADDRESSES = []
+LOCAL_ADDRESS = None
+LEADER_ADDRESS = None  # Track the leader's address when we become leader
+SHOULD_KEEP_RUNNING = True  # Control flag for main loop
 
-def transition_to_leader_mode(replica_addresses):
+def send_heartbeats(replica_addresses):
     """
-    Transition the current replica process to leader mode:
-    shuts down the replica services and starts the leader services.
+    Periodically send heartbeats to all replicas.
     """
-    logger.info(
-        "Transitioning to leader mode: shutting down replica services and starting leader services."
-    )
-
-    python_executable = sys.executable
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    leader_script = os.path.join(current_dir, "server.py")
-
-    new_args = [
-        python_executable,
-        leader_script,
-        "--port",
-        "50051",
-        "--replicas",
-        replica_addresses,
-    ]
-
-    logger.info(f"Executing leader mode with command: {new_args}")
-
-    subprocess.Popen(new_args)
-    # Exit the current process after starting the new leader.
-    os._exit(0)
-
-
-def monitor_leader(election_manager, check_interval=10):
-    """
-    Runs in the background to check if the leader is alive.
-    If we haven't received a heartbeat for too long, we start an election.
-    If election_manager.elect_leader() returns True, this replica becomes the leader.
-    """
-    global LAST_HEARTBEAT_TIME
-
-    while True:
-        elapsed = time.time() - LAST_HEARTBEAT_TIME
-        if elapsed > LEADER_TIMEOUT_SECS:
-            logger.warning("No heartbeat from leader. Starting leader election...")
-            # election_manager.elect_leader() returns True if this replica should become leader.
-            if election_manager.elect_leader():
-                logger.info("I have been elected as the new leader!")
-                replica_addresses_str = ",".join(ALL_REPLICA_ADDRESSES)
-                transition_to_leader_mode(replica_addresses=replica_addresses_str)
-                break  # Exit the monitor loop once we transition to leader mode.
-            else:
-                logger.info("Leader election check: still not leader.")
-            # Reset LAST_HEARTBEAT_TIME so we don't keep re-triggering elections immediately.
-            LAST_HEARTBEAT_TIME = time.time()
-        time.sleep(check_interval)
+    global RUNNING_MODE, LEADER_ADDRESS
+    
+    logger.info(f"Starting heartbeat thread. Sending to replicas: {replica_addresses}")
+    
+    # Keep sending heartbeats as long as we're in leader mode
+    while RUNNING_MODE == "leader" and SHOULD_KEEP_RUNNING:
+        for replica_addr in replica_addresses:
+            # Skip self - both the replica address and the leader address
+            if replica_addr == LOCAL_ADDRESS or replica_addr == LEADER_ADDRESS:
+                continue
+                
+            channel = grpc.insecure_channel(replica_addr)
+            try:
+                # Wait up to 2 seconds for the channel to be ready
+                grpc.channel_ready_future(channel).result(timeout=2.0)
+                stub = replica_pb2_grpc.ReplicaServiceStub(channel)
+                request = replica_pb2.HeartbeatRequest(leader_id=f"Leader-{REPLICA_ID}@{LEADER_ADDRESS}")
+                response = stub.Heartbeat(request, timeout=2.0)
+                logger.info(
+                    f"Sent heartbeat to replica {replica_addr}. Response: {response.message}"
+                )
+            except grpc.FutureTimeoutError:
+                logger.warning(
+                    f"Replica {replica_addr} is down and is not receiving heartbeats."
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to send heartbeat to replica {replica_addr}: {e}"
+                )
+            finally:
+                channel.close()
+        time.sleep(3)
+    
+    logger.info("Heartbeat thread exiting")
 
 
 class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
+    """
+    Implementation of the replica service.
+    """
 
     def GetLeader(self, request, context):
-        # Determine the current leader’s address.
+        # Determine the current leader's address.
         # For example, if using a global variable:
         if CURRENT_LEADER_ADDRESS:
             return replica_pb2.GetLeaderResponse(leader_address=CURRENT_LEADER_ADDRESS)
@@ -259,50 +255,231 @@ class ReplicaServiceServicer(replica_pb2_grpc.ReplicaServiceServicer):
         return replica_pb2.GetReplicaIDResponse(replica_id=REPLICA_ID)
 
 
+def get_leader_port():
+    """
+    Determine what port to use for the leader.
+    If a current leader exists, use its port, otherwise use the default.
+    """
+    global CURRENT_LEADER_ADDRESS, LEADER_PORT
+    
+    if CURRENT_LEADER_ADDRESS:
+        # Try to extract port from the current leader address
+        try:
+            # Check if leader ID contains address info (format: "Leader-ID@host:port")
+            if '@' in CURRENT_LEADER_ADDRESS:
+                addr_part = CURRENT_LEADER_ADDRESS.split('@')[1]
+                port = addr_part.split(':')[1]
+                logger.info(f"Using previous leader's port: {port}")
+                return port
+            # Otherwise assume it might be a direct address (host:port)
+            elif ':' in CURRENT_LEADER_ADDRESS:
+                port = CURRENT_LEADER_ADDRESS.split(':')[1]
+                logger.info(f"Using previous leader's port: {port}")
+                return port
+        except Exception as e:
+            logger.warning(f"Failed to extract port from leader address: {e}")
+    
+    # Default to standard leader port
+    logger.info(f"Using default leader port: {LEADER_PORT}")
+    return LEADER_PORT
+
+
+def transition_to_leader_mode(replica_addresses):
+    """
+    Transition to leader mode by starting a new server instance on the leader port
+    without stopping the current replica instance.
+    """
+    global RUNNING_MODE, HEARTBEAT_THREAD, LEADER_ADDRESS
+    
+    logger.info("Transitioning to leader mode")
+    
+    try:
+        # Import the real MessagingServiceServicer from server.py
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        server_module = importlib.import_module("server")
+        
+        # Get the actual service implementation and protocol
+        MessagingServiceServicer = server_module.MessagingServiceServicer
+        protocols_pb2_grpc = importlib.import_module("protocols_pb2_grpc")
+        
+        # Create a new server for leader services
+        leader_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+        
+        # Initialize the real MessagingServiceServicer
+        # Convert replica_addresses to list if it's a string
+        if isinstance(replica_addresses, str):
+            replica_addrs_list = replica_addresses.split(",")
+        else:
+            replica_addrs_list = replica_addresses
+            
+        logger.info(f"Creating MessagingServiceServicer with replicas: {replica_addrs_list}")
+        
+        # Initialize with the same DB file we're currently using
+        messaging_service = MessagingServiceServicer(
+            db_file=replica_db_file,
+            replica_addresses=replica_addrs_list
+        )
+        
+        # Add service to server
+        protocols_pb2_grpc.add_MessagingServiceServicer_to_server(
+            messaging_service, leader_server
+        )
+        
+        # Determine what port to use for the leader
+        leader_port = get_leader_port()
+        
+        # Bind to leader port
+        leader_host = "0.0.0.0"  # Listen on all interfaces
+        leader_address = f"{leader_host}:{leader_port}"
+        leader_server.add_insecure_port(leader_address)
+        
+        # Store the leader address for reference
+        LEADER_ADDRESS = leader_address
+        
+        # Start the leader server
+        logger.info(f"Starting leader server on {leader_address}")
+        leader_server.start()
+        
+        # Update the mode to leader
+        RUNNING_MODE = "leader"
+        
+        # Start heartbeat thread
+        HEARTBEAT_THREAD = threading.Thread(
+            target=send_heartbeats,
+            args=(replica_addrs_list,),
+            daemon=True
+        )
+        HEARTBEAT_THREAD.start()
+        
+        logger.info("Successfully transitioned to leader mode")
+        
+        # Wait for termination
+        leader_server.wait_for_termination()
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error transitioning to leader mode: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
+
+def monitor_leader(election_manager, check_interval=10):
+    """
+    Runs in the background to check if the leader is alive.
+    If we haven't received a heartbeat for too long, we start an election.
+    """
+    global LAST_HEARTBEAT_TIME, RUNNING_MODE
+    
+    while RUNNING_MODE == "replica" and SHOULD_KEEP_RUNNING:
+        elapsed = time.time() - LAST_HEARTBEAT_TIME
+        if elapsed > LEADER_TIMEOUT_SECS:
+            logger.warning("No heartbeat from leader. Starting leader election...")
+            
+            # Check if this replica should become leader
+            if election_manager.elect_leader():
+                logger.info("I have been elected as the new leader!")
+                
+                # Start leader transition in a separate thread
+                leader_thread = threading.Thread(
+                    target=transition_to_leader_mode,
+                    args=(ALL_REPLICA_ADDRESSES,),
+                    daemon=True
+                )
+                leader_thread.start()
+                
+                # Exit the monitor loop as we're transitioning to leader
+                break
+            else:
+                logger.info("Leader election check: still not leader.")
+                
+            # Reset heartbeat time to avoid continuous elections
+            LAST_HEARTBEAT_TIME = time.time()
+            
+        time.sleep(check_interval)
+    
+    logger.info("Monitor thread exiting")
+
+
 def serve(
-    host="0.0.0.0", port="50052", db_file=None, replica_id=0, replica_addresses=None
+    host="0.0.0.0", port="50052", db_file=None, replica_id=0, replica_addresses=None,
+    leader_port=None
 ):
-    global REPLICA_ID, db, user_manager, ALL_REPLICA_ADDRESSES, LOCAL_ADDRESS
-    REPLICA_ID = replica_id  # Save the replica ID.
-
-    # Set local address
+    global REPLICA_ID, db, user_manager, ALL_REPLICA_ADDRESSES, LOCAL_ADDRESS, SERVER
+    global RUNNING_MODE, SHOULD_KEEP_RUNNING, replica_db_file, LEADER_PORT
+    
+    # Initialize globals
+    REPLICA_ID = replica_id
+    RUNNING_MODE = "replica"
+    SHOULD_KEEP_RUNNING = True
     LOCAL_ADDRESS = f"{host}:{port}"
-
-    # (Re)initialize database and user_manager if needed.
+    
+    # Store leader port if provided
+    if leader_port:
+        LEADER_PORT = leader_port
+    
+    # Store the DB file path
     if db_file:
+        replica_db_file = db_file
         db = Database(db_file)
         user_manager = UserManager(db_file)
-
-    # Store the list of all replicas including their IP addresses
+    
+    # Store replica addresses
     if replica_addresses:
-        ALL_REPLICA_ADDRESSES = replica_addresses
+        if isinstance(replica_addresses, str):
+            ALL_REPLICA_ADDRESSES = replica_addresses.split(",")
+        else:
+            ALL_REPLICA_ADDRESSES = replica_addresses
     else:
-        ALL_REPLICA_ADDRESSES = [
-            "localhost:50052",
-            "localhost:50053",
-        ]  # Default for local testing
-
+        ALL_REPLICA_ADDRESSES = ["localhost:50052", "localhost:50053"]
+    
+    # Create and start the replica server
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     replica_pb2_grpc.add_ReplicaServiceServicer_to_server(
         ReplicaServiceServicer(), server
     )
     server_address = f"{host}:{port}"
     server.add_insecure_port(server_address)
-    logger.info(
-        f"Replica server (ID={REPLICA_ID}) running on {server_address} with DB file {db.db_file}..."
-    )
-
+    
+    # Store server in global variable
+    SERVER = server
+    
+    logger.info(f"Replica server (ID={REPLICA_ID}) running on {server_address} with DB file {db.db_file}...")
+    
+    # Initialize election manager
     election_manager = ElectionManager(
         replica_addresses=ALL_REPLICA_ADDRESSES,
         local_replica_id=REPLICA_ID,
     )
-    # Start a background thread to monitor the leader.
-    election_thread = threading.Thread(
-        target=monitor_leader, args=(election_manager,), daemon=True
+    
+    # Start leader monitor thread
+    monitor_thread = threading.Thread(
+        target=monitor_leader,
+        args=(election_manager,),
+        daemon=True
     )
-    election_thread.start()
+    monitor_thread.start()
+    
+    # Start the server
     server.start()
-    server.wait_for_termination()
+    
+    try:
+        # Keep the main thread running
+        while SHOULD_KEEP_RUNNING:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Received KeyboardInterrupt, shutting down gracefully...")
+        SHOULD_KEEP_RUNNING = False
+        
+        # Stop the server
+        server.stop(1)
+        
+        # Wait for heartbeat thread to finish if it exists
+        if HEARTBEAT_THREAD and HEARTBEAT_THREAD.is_alive():
+            HEARTBEAT_THREAD.join(timeout=3)
+    except Exception as e:
+        logger.error(f"Error during server execution: {e}")
+        server.stop(0)
 
 
 if __name__ == "__main__":
@@ -331,14 +508,26 @@ if __name__ == "__main__":
         default="localhost:50052",
         help="Comma-separated list of replica addresses",
     )
+    parser.add_argument(
+        "--leader-port",
+        type=str,
+        default="50051",
+        help="Default port for leader (used if no current leader exists)",
+    )
+    
     args = parser.parse_args()
-    replica_addresses = (
-        args.replicas.split(",") if args.replicas else ["localhost:50052"]
-    )
-    serve(
-        host=args.host,
-        port=args.port,
-        db_file=args.db_file,
-        replica_id=args.replica_id,
-        replica_addresses=replica_addresses,
-    )
+    replica_addresses = args.replicas.split(",") if args.replicas else ["localhost:50052"]
+    
+    try:
+        serve(
+            host=args.host,
+            port=args.port,
+            db_file=args.db_file,
+            replica_id=args.replica_id,
+            replica_addresses=replica_addresses,
+            leader_port=args.leader_port
+        )
+    except KeyboardInterrupt:
+        logger.info("Exiting due to keyboard interrupt")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")

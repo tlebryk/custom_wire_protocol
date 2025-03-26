@@ -61,7 +61,7 @@ def transition_to_leader_mode(replica_addresses):
 
     logger.info(f"Executing leader mode with command: {new_args}")
 
-    subprocess.Popen(new_args, preexec_fn=os.setpgrp)
+    subprocess.Popen(new_args)
     # Exit the current process after starting the new leader.
     os._exit(0)
 

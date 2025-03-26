@@ -1,81 +1,153 @@
-# tests/test_election_manager_get_peer_ids.py
+# test_election_manager.py
+import grpc
 import pytest
+
 from election_manager import ElectionManager
-import replica_pb2
+
+# --- Helpers for faking gRPC responses ---
 
 
-# A dummy stub that simulates a replica's response.
-class DummyReplicaStub:
-    def __init__(self, replica_id):
+class FakeRpcError(grpc.RpcError):
+    def __init__(self, code):
+        self._code = code
+
+    def code(self):
+        return self._code
+
+
+class DummyChannel:
+    def close(self):
+        pass
+
+
+class FakeReplicaStub:
+    def __init__(
+        self, replica_id=None, throw_error=False, error_code=grpc.StatusCode.UNKNOWN
+    ):
         self.replica_id = replica_id
+        self.throw_error = throw_error
+        self.error_code = error_code
 
-    def GetReplicaID(self, request):
-        response = replica_pb2.GetReplicaIDResponse()
-        response.replica_id = self.replica_id
-        return response
-
-
-# Dummy _get_stub for success: returns a DummyReplicaStub by extracting a number from the address.
-def dummy_get_stub(self, address: str):
-    try:
-        rid = int(address[-1])
-    except ValueError:
-        rid = 0
-    return DummyReplicaStub(rid)
+    def GetReplicaID(self, request, timeout):
+        if self.throw_error:
+            raise FakeRpcError(self.error_code)
+        # Return a dummy response object with a 'replica_id' attribute.
+        return type("DummyResponse", (object,), {"replica_id": self.replica_id})()
 
 
-# Dummy _get_stub for failure: if the address contains the word "fail", raise an exception.
-def dummy_get_stub_failure(self, address: str):
-    if "fail" in address:
-        raise Exception("Simulated failure")
-    try:
-        rid = int(address[-1])
-    except ValueError:
-        rid = 0
-    return DummyReplicaStub(rid)
+# --- Tests for ElectionManager ---
 
 
-@pytest.fixture
-def election_manager_success(monkeypatch):
-    # For testing, simulate three peer addresses: "replica1", "replica2", "replica3".
-    replica_addresses = ["replica1", "replica2", "replica3"]
-    local_replica_id = 3
-    em = ElectionManager(replica_addresses, local_replica_id)
-    # Patch the _get_stub method so that our dummy_get_stub is used.
-    monkeypatch.setattr(ElectionManager, "_get_stub", dummy_get_stub)
-    return em
+def test_get_peer_ids_all_success(monkeypatch):
+    # Mapping addresses to fake stubs with valid replica IDs.
+    mapping = {
+        "addr1": FakeReplicaStub(replica_id=1),
+        "addr2": FakeReplicaStub(replica_id=2),
+    }
+
+    def fake_get_stub(self, addr):
+        stub = mapping[addr]
+        return stub, DummyChannel()
+
+    monkeypatch.setattr(ElectionManager, "_get_stub", fake_get_stub)
+    # local_replica_id is 2, so expect local_address to be set to "addr2".
+    em = ElectionManager(replica_addresses=["addr1", "addr2"], local_replica_id=2)
+    peer_ids = em.get_peer_ids()
+    assert peer_ids == {"addr1": 1, "addr2": 2}
+    assert em.local_address == "addr2"
 
 
-def test_get_peer_ids_success(election_manager_success):
-    peer_ids = election_manager_success.get_peer_ids()
-    # We expect IDs 1, 2, and 3 from the addresses.
-    assert sorted(peer_ids) == [1, 2, 3]
+def test_get_peer_ids_with_error(monkeypatch):
+    # Simulate addr1 succeeds and addr2 times out.
+    mapping = {
+        "addr1": FakeReplicaStub(replica_id=1),
+        "addr2": FakeReplicaStub(
+            throw_error=True, error_code=grpc.StatusCode.DEADLINE_EXCEEDED
+        ),
+    }
+
+    def fake_get_stub(self, addr):
+        stub = mapping[addr]
+        return stub, DummyChannel()
+
+    monkeypatch.setattr(ElectionManager, "_get_stub", fake_get_stub)
+    em = ElectionManager(replica_addresses=["addr1", "addr2"], local_replica_id=1)
+    peer_ids = em.get_peer_ids()
+    # Only addr1 returns a valid ID.
+    assert peer_ids == {"addr1": 1}
+    assert em.local_address == "addr1"
 
 
-@pytest.fixture
-def election_manager_failure(monkeypatch):
-    # Simulate two good peers and one failing peer.
-    replica_addresses = ["replica1", "fail_replica", "replica3"]
-    local_replica_id = 3
-    em = ElectionManager(replica_addresses, local_replica_id)
-    # Patch _get_stub so that the address containing "fail" raises an exception.
-    monkeypatch.setattr(ElectionManager, "_get_stub", dummy_get_stub_failure)
-    return em
+def test_elect_leader_is_leader(monkeypatch):
+    # Two replicas: addr1 returns 1, addr2 returns 2; local replica ID is 2.
+    mapping = {
+        "addr1": FakeReplicaStub(replica_id=1),
+        "addr2": FakeReplicaStub(replica_id=2),
+    }
+
+    def fake_get_stub(self, addr):
+        stub = mapping[addr]
+        return stub, DummyChannel()
+
+    monkeypatch.setattr(ElectionManager, "_get_stub", fake_get_stub)
+    em = ElectionManager(replica_addresses=["addr1", "addr2"], local_replica_id=2)
+    # elect_leader calls get_peer_ids internally.
+    is_leader = em.elect_leader()
+    assert is_leader is True
 
 
-def test_get_peer_ids_failure(election_manager_failure):
-    peer_ids = election_manager_failure.get_peer_ids()
-    # "replica1" yields 1, "replica3" yields 3, and "fail_replica" causes an exception and is skipped.
-    assert sorted(peer_ids) == [1, 3]
+def test_elect_leader_not_leader(monkeypatch):
+    # Two replicas: addr1 returns 1, addr2 returns 3; local replica ID is 2.
+    mapping = {
+        "addr1": FakeReplicaStub(replica_id=1),
+        "addr2": FakeReplicaStub(replica_id=3),
+    }
+
+    def fake_get_stub(self, addr):
+        stub = mapping[addr]
+        return stub, DummyChannel()
+
+    monkeypatch.setattr(ElectionManager, "_get_stub", fake_get_stub)
+    em = ElectionManager(replica_addresses=["addr1", "addr2"], local_replica_id=2)
+    is_leader = em.elect_leader()
+    assert is_leader is False
 
 
-@pytest.mark.parametrize(
-    "peer_ids, expected",
-    [
-        ([1, 2], True),
-        ([5, 2], False),
-    ],
-)
-def test_elect_leader(monkeypatch, election_manager_success, peer_ids, expected):
-    monkeypatch.setattr(election_manager_success, "get_peer_ids", lambda: peer_ids)
-    assert election_manager_success.elect_leader() == expected
+def test_notify_election_result_not_winner(monkeypatch):
+    # When not the winner, no notifications should be sent.
+    fake_notify_calls = {"addr1": 0, "addr2": 0}
+
+    class FakeReplicaStubNotify(FakeReplicaStub):
+        def __init__(
+            self, replica_id, throw_error=False, error_code=grpc.StatusCode.UNKNOWN
+        ):
+            super().__init__(
+                replica_id=replica_id, throw_error=throw_error, error_code=error_code
+            )
+            self.address = None
+
+        def NotifyElectionResult(self, request, timeout):
+            fake_notify_calls[self.address] += 1
+            return type(
+                "DummyNotifyResponse",
+                (object,),
+                {"success": True, "message": "Notified"},
+            )()
+
+    mapping = {
+        "addr1": FakeReplicaStubNotify(replica_id=1),
+        "addr2": FakeReplicaStubNotify(replica_id=2),
+    }
+
+    def fake_get_stub(self, addr):
+        stub = mapping[addr]
+        stub.address = addr
+        return stub, DummyChannel()
+
+    monkeypatch.setattr(ElectionManager, "_get_stub", fake_get_stub)
+    em = ElectionManager(replica_addresses=["addr1", "addr2"], local_replica_id=2)
+    em.local_address = "addr2"
+    # When not winning, notify_election_result should return immediately without notifying.
+    em.notify_election_result(won=False)
+    assert fake_notify_calls["addr1"] == 0
+    assert fake_notify_calls["addr2"] == 0

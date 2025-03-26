@@ -1,0 +1,386 @@
+# messaging_service_servicer.py
+import os
+import threading
+import time
+import grpc
+from datetime import datetime
+
+import protocols_pb2
+import protocols_pb2_grpc
+import replica_pb2
+import replica_pb2_grpc
+from database import Database
+from logger import setup_logger
+from replication_manager import ReplicationManager
+from users import UserManager
+
+# Set up a dedicated logger for this module.
+logger = setup_logger("messaging_service_servicer")
+
+
+class MessagingServiceServicer(protocols_pb2_grpc.MessagingServiceServicer):
+    def __init__(self, db_file=None, replica_addresses=None):
+        """
+        Initializes the messaging service with a UserManager instance,
+        a Database instance, and a ReplicationManager for replica servers.
+        """
+        self.db_file = db_file or os.environ.get("DB_FILE", "chat_app.db")
+        self.user_manager = UserManager(db_file=self.db_file)
+        self.db = Database(db_file=self.db_file)
+
+        # Initialize the replication manager
+        self.replication_manager = ReplicationManager(replica_addresses)
+
+        # Dictionary to track online users: {username: (context, queue)}
+        self.online_users = {}
+        self.online_users_lock = threading.Lock()
+
+    def enqueue_message(self, username, message):
+        """Add a message to a user's message queue if they are online."""
+        with self.online_users_lock:
+            if username in self.online_users:
+                _, msg_queue = self.online_users[username]
+                msg_queue.append(message)
+
+    def Login(self, request, context):
+        """Authenticate a user."""
+        logger.info("Login called for user: %s", request.username)
+        if self.user_manager.authenticate_user(request.username, request.password):
+            with self.online_users_lock:
+                self.online_users[request.username] = (context, [])
+            return protocols_pb2.ConfirmLoginResponse(
+                username=request.username,
+                message="Logged in successfully",
+                status="success",
+            )
+        else:
+            return protocols_pb2.ConfirmLoginResponse(
+                username=request.username,
+                message="Invalid username or password",
+                status="error",
+            )
+
+    def Register(self, request, context):
+        """Register a new user."""
+        logger.info("Register called for user: %s", request.username)
+        success, msg = self.user_manager.register_user(
+            request.username, request.password
+        )
+        if success:
+            replication_success = self.replication_manager.replicate_register_user(
+                request.username, request.password
+            )
+            if not replication_success:
+                logger.warning(
+                    f"Replication of user registration for {request.username} failed on some replicas"
+                )
+        return protocols_pb2.SuccessResponse(
+            message=msg, status="success" if success else "error"
+        )
+
+    def DeleteAccount(self, request, context):
+        """Delete a user's account."""
+        logger.info("DeleteAccount called for user: %s", request.username)
+        success = self.user_manager.delete_account(request.username)
+        if success:
+            with self.online_users_lock:
+                self.online_users.pop(request.username, None)
+            replication_success = self.replication_manager.replicate_delete_account(
+                request.username
+            )
+            if not replication_success:
+                logger.warning(
+                    f"Replication of account deletion for {request.username} failed on some replicas"
+                )
+            return protocols_pb2.SuccessResponse(
+                message="Account deleted successfully.", status="success"
+            )
+        else:
+            context.set_details("Failed to delete account.")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.SuccessResponse(
+                message="Failed to delete account.", status="error"
+            )
+
+    def Subscribe(self, request, context):
+        """Allow a user to receive messages."""
+        logger.info("Subscribe called for user: %s", request.username)
+        with self.online_users_lock:
+            self.online_users[request.username] = (context, [])
+        try:
+            while context.is_active():
+                with self.online_users_lock:
+                    _, msg_queue = self.online_users.get(request.username, (None, []))
+                    while msg_queue:
+                        yield msg_queue.pop(0)
+                time.sleep(0.5)
+        except Exception as e:
+            logger.error("Error in Subscribe for user %s: %s", request.username, e)
+        finally:
+            with self.online_users_lock:
+                self.online_users.pop(request.username, None)
+            logger.info("User %s unsubscribed.", request.username)
+
+    def SendMessage(self, request, context):
+        """Send a message to another user."""
+        logger.info(
+            "SendMessage called. Message: %s, Receiver: %s",
+            request.message,
+            request.receiver,
+        )
+        try:
+            metadata = dict(context.invocation_metadata())
+            sender = metadata.get("sender", "unknown_sender")
+            if not request.message:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                return protocols_pb2.ConfirmSendMessageResponse(
+                    message="Empty message cannot be sent", status="error"
+                )
+            if not request.receiver:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                return protocols_pb2.ConfirmSendMessageResponse(
+                    message="Receiver username is required", status="error"
+                )
+            # Insert message into database
+            message_id = self.db.insert_message(
+                sender, request.message, request.receiver
+            )
+            logger.info("Message inserted with ID: %d", message_id)
+            # Replicate message insertion to replicas
+            timestamp = datetime.utcnow().isoformat() + "Z"
+            replication_success = self.replication_manager.replicate_insert_message(
+                sender, request.message, request.receiver, timestamp
+            )
+            if not replication_success:
+                logger.warning(
+                    f"Replication of message from {sender} to {request.receiver} failed on some replicas"
+                )
+            logger.info(
+                "ReceivedMessage fields: %s",
+                protocols_pb2.ReceivedMessage.DESCRIPTOR.fields_by_name,
+            )
+            try:
+                received_msg = protocols_pb2.ReceivedMessage(
+                    message=request.message,
+                    sender=sender,
+                    timestamp=timestamp,
+                    read="false",
+                    id=message_id,
+                    username=sender,
+                )
+            except Exception as e:
+                logger.error("Failed to create ReceivedMessage: %s", e)
+                raise
+            with self.online_users_lock:
+                receiver_entry = self.online_users.get(request.receiver)
+            if receiver_entry:
+                self.enqueue_message(request.receiver, received_msg)
+                logger.info(
+                    "Message enqueued for online receiver '%s'.", request.receiver
+                )
+            return protocols_pb2.ConfirmSendMessageResponse(
+                message=request.message,
+                status="success",
+                timestamp=timestamp,
+            )
+        except Exception as e:
+            logger.error("Error in SendMessage: %s", e)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.ConfirmSendMessageResponse(
+                message="Internal server error", status="error"
+            )
+
+    def SearchUsers(self, request, context):
+        """Search for users."""
+        try:
+            users = self.db.search_users_in_db(request.query)
+            return protocols_pb2.SearchUsersResponse(usernames=users, status="success")
+        except Exception as e:
+            logger.error("Error searching for users: %s", e)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.SearchUsersResponse(usernames=[], status="error")
+
+    def GetUsers(self, request, context):
+        """Get a list of all users except the current user."""
+        try:
+            users = self.db.get_all_users_except(request.username)
+            return protocols_pb2.GetUsersResponse(usernames=users, status="success")
+        except Exception as e:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.GetUsersResponse(usernames=[], status="error")
+
+    def GetRecentMessages(self, request, context):
+        """Fetch recent messages for a user."""
+        try:
+            recent_tuples = self.db.get_recent_messages(request.username, limit=50)
+            messages = [
+                protocols_pb2.ChatMessage(
+                    message=t[1], timestamp=t[3], sender=t[0], id=t[4]
+                )
+                for t in recent_tuples
+            ]
+            return protocols_pb2.RecentMessagesResponse(
+                messages=messages, status="success"
+            )
+        except Exception as e:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.RecentMessagesResponse(messages=[], status="error")
+
+    def GetUnreadMessages(self, request, context):
+        """Fetch unread messages for a user."""
+        try:
+            unread_tuples = self.db.get_unread_messages(request.username, limit=50)
+            messages = [
+                protocols_pb2.ChatMessage(
+                    message=t[2], timestamp=t[3], sender=t[1], id=t[0]
+                )
+                for t in unread_tuples
+            ]
+            return protocols_pb2.UnreadMessagesResponse(
+                messages=messages, status="success"
+            )
+        except Exception as e:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.UnreadMessagesResponse(messages=[], status="error")
+
+    def MarkAsRead(self, request, context):
+        """Mark messages as read."""
+        try:
+            message_ids = list(request.message_ids)
+            self.db.mark_messages_as_read(message_ids)
+            replication_success = (
+                self.replication_manager.replicate_mark_messages_as_read(message_ids)
+            )
+            if not replication_success:
+                logger.warning(
+                    f"Replication of mark as read for {message_ids} failed on some replicas"
+                )
+            return protocols_pb2.ConfirmMarkAsReadResponse(
+                message="Messages marked as read.", status="success"
+            )
+        except Exception as e:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.ConfirmMarkAsReadResponse(
+                message="Internal server error", status="error"
+            )
+
+    def DeleteMessage(self, request, context):
+        """Delete a message."""
+        try:
+            message_id = request.message_id
+            success = self.db.delete_message(message_id)
+            if success:
+                replication_success = self.replication_manager.replicate_delete_message(
+                    message_id
+                )
+                if not replication_success:
+                    logger.warning(
+                        f"Replication of message deletion for message {message_id} failed on some replicas"
+                    )
+                return protocols_pb2.SuccessResponse(
+                    message="Message deleted successfully.", status="success"
+                )
+            else:
+                context.set_details("Failed to delete message.")
+                context.set_code(grpc.StatusCode.INTERNAL)
+                return protocols_pb2.SuccessResponse(
+                    message="Failed to delete message.", status="error"
+                )
+        except Exception as e:
+            logger.error(f"Error in DeleteMessage: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.SuccessResponse(
+                message="Internal server error", status="error"
+            )
+
+    def UpdateUnreadMessageCount(self, request, context):
+        """Update unread message count for a user."""
+        try:
+            username = request.username
+            count = request.count
+            success = self.db.set_n_unread_messages(username, count)
+            if success:
+                replication_success = (
+                    self.replication_manager.replicate_set_n_unread_messages(
+                        username, count
+                    )
+                )
+                if not replication_success:
+                    logger.warning(
+                        f"Replication of unread message count update for {username} failed on some replicas"
+                    )
+                return protocols_pb2.SuccessResponse(
+                    message="Unread message count updated successfully.",
+                    status="success",
+                )
+            else:
+                context.set_details("Failed to update unread message count.")
+                context.set_code(grpc.StatusCode.INTERNAL)
+                return protocols_pb2.SuccessResponse(
+                    message="Failed to update unread message count.", status="error"
+                )
+        except Exception as e:
+            logger.error(f"Error in UpdateUnreadMessageCount: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.SuccessResponse(
+                message="Internal server error", status="error"
+            )
+
+    def SetNUnreadMessages(self, request, context):
+        """
+        Set the number of unread messages for a user.
+        Updates the user's unread messages count in the leader's database,
+        enqueues unread messages for the user, and replicates the update.
+        """
+        username = request.username
+        n_unread = request.n_unread_messages
+        user_info = self.db.get_user_info(username)
+        n_message_index = 1
+        if user_info:
+            n_unread_old = user_info[n_message_index]
+            if not n_unread_old:
+                n_unread_old = 50
+        else:
+            logger.info(f"User '{username}' not found in database.")
+            n_unread_old = 50
+        if not n_unread:
+            context.set_details("Number of unread messages is required.")
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            return protocols_pb2.SuccessResponse(
+                message="Number of unread messages is required.", status="error"
+            )
+        success = self.db.set_n_unread_messages(username, n_unread)
+        if success:
+            try:
+                unread_tuples = self.db.get_unread_messages(username, limit=n_unread)
+                for tup in unread_tuples:
+                    msg_id, sender, content, timestamp = tup
+                    received_msg = protocols_pb2.ReceivedMessage(
+                        message=content,
+                        sender=sender,
+                        timestamp=timestamp,
+                        read="false",
+                        id=int(msg_id),
+                        username=sender,
+                    )
+                    self.enqueue_message(username, received_msg)
+            except Exception as e:
+                logger.error("Error fetching unread messages: %s", e)
+            replication_success = (
+                self.replication_manager.replicate_set_n_unread_messages(
+                    username, n_unread
+                )
+            )
+            if not replication_success:
+                logger.warning(
+                    f"Replication of unread message count update for {username} failed on some replicas"
+                )
+            return protocols_pb2.SuccessResponse(
+                message="Number of unread messages set successfully.", status="success"
+            )
+        else:
+            context.set_details("Failed to set number of unread messages.")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return protocols_pb2.SuccessResponse(
+                message="Failed to set number of unread messages.", status="error"
+            )

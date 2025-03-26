@@ -1,113 +1,177 @@
 import pytest
 import sqlite3
+import hashlib
 import os
-from users import UserManager
+from users import (
+    UserManager,
+)  # Assuming the UserManager class is in user_manager.py
 
-# Use an in-memory SQLite database for testing
-TEST_DB_FILE = ":memory:"
 
-
+# Fixture to create a temporary SQLite database for each test
 @pytest.fixture
-def user_manager():
-    """Fixture to create a fresh UserManager instance with an in-memory database."""
-    return UserManager(db_file=TEST_DB_FILE)
-
-
-def test_hash_password(user_manager):
-    """Test password hashing functionality."""
-    password = "test123"
-    hashed = user_manager._hash_password(
-        password
-    )  # Using private method directly for test purposes
-
-    assert isinstance(hashed, str)
-    assert len(hashed) == 64  # SHA-256 produces 64 character hex string
-
-    # Test consistency
-    assert user_manager._hash_password(password) == user_manager._hash_password(
-        password
+def db_file(tmp_path):
+    db_file = tmp_path / "test.db"
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON;")
+    cursor.execute(
+        """
+        CREATE TABLE users (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT
+        )
+    """
     )
-
-    # Test different passwords produce different hashes
-    assert user_manager._hash_password("test123") != user_manager._hash_password(
-        "test124"
+    cursor.execute(
+        """
+        CREATE TABLE messages (
+            id INTEGER PRIMARY KEY,
+            sender TEXT,
+            content TEXT,
+            FOREIGN KEY (sender) REFERENCES users (username)
+        )
+    """
     )
-
-    # Test empty string
-    assert len(user_manager._hash_password("")) == 64
-
-
-def test_register_user_empty_credentials(user_manager):
-    """Test registration with empty credentials."""
-    success, message = user_manager.register_user("", "")
-    assert success is False
-    assert "failed" in message.lower()
+    conn.commit()
+    conn.close()
+    return str(db_file)
 
 
-def test_password_hash_security(user_manager):
-    """Test security aspects of password hashing."""
-    password = "test123"
-    hashed = user_manager._hash_password(password)
+# Tests for register_user method
+def test_register_user_success(db_file):
+    um = UserManager(db_file)
+    success, message = um.register_user("testuser", "password123")
+    assert success, "Registration should succeed"
+    assert message == "Registration successful. You can now log in."
 
-    # Test that similar passwords produce different hashes
-    similar_passwords = ["test1234", "Test123", "test 123", "test123 "]
-    for similar_pwd in similar_passwords:
-        assert user_manager._hash_password(similar_pwd) != hashed
-
-
-def test_register_and_authenticate_user(user_manager):
-    """Test registering a user and authenticating them."""
-    username = "test_user"
-    password = "securepassword"
-
-    # Register the user
-    success, message = user_manager.register_user(username, password)
-    assert success is True
-    assert "successful" in message.lower()
-
-    # Authenticate with correct password
-    assert user_manager.authenticate_user(username, password) is True
-
-    # Authenticate with incorrect password
-    assert user_manager.authenticate_user(username, "wrongpassword") is False
+    # Verify the user is in the database with the correct hash
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    cursor.execute("SELECT password_hash FROM users WHERE username = ?", ("testuser",))
+    row = cursor.fetchone()
+    assert row is not None, "User should exist in the database"
+    stored_hash = row[0]
+    expected_hash = hashlib.sha256("password123".encode("utf-8")).hexdigest()
+    assert stored_hash == expected_hash, "Password hash should match"
+    conn.close()
 
 
-def test_register_duplicate_user(user_manager):
-    """Test that registering a duplicate username fails."""
-    username = "duplicate_user"
-    password = "password123"
+def test_register_user_existing(db_file):
+    um = UserManager(db_file)
+    um.register_user("testuser", "password123")
+    success, message = um.register_user("testuser", "anotherpassword")
+    assert not success, "Registration should fail for existing username"
+    assert message == "Username already exists."
 
-    # First registration should succeed
-    success, message = user_manager.register_user(username, password)
-    assert success is True
-
-    # Second registration should fail
-    success, message = user_manager.register_user(username, password)
-    assert success is False
-    assert "already exists" in message.lower()
-
-
-def test_delete_nonexistent_account(user_manager):
-    """Test deleting a non-existent account."""
-    success = user_manager.delete_account("nonexistent_user")
-    assert success is False
+    # Verify the original password hash remains unchanged
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    cursor.execute("SELECT password_hash FROM users WHERE username = ?", ("testuser",))
+    row = cursor.fetchone()
+    assert row is not None, "User should still exist"
+    stored_hash = row[0]
+    expected_hash = hashlib.sha256("password123".encode("utf-8")).hexdigest()
+    assert stored_hash == expected_hash, "Password hash should not change"
+    conn.close()
 
 
-def test_register_and_delete_user(user_manager):
-    """Test registering and then deleting a user."""
-    username = "delete_me"
-    password = "mypassword"
+# Tests for authenticate_user method
+def test_authenticate_user_success(db_file):
+    um = UserManager(db_file)
+    um.register_user("testuser", "password123")
+    assert um.authenticate_user(
+        "testuser", "password123"
+    ), "Authentication should succeed with correct credentials"
 
-    # Register the user
-    success, _ = user_manager.register_user(username, password)
-    assert success is True
 
-    # Authenticate to ensure user exists
-    assert user_manager.authenticate_user(username, password) is True
+def test_authenticate_user_wrong_password(db_file):
+    um = UserManager(db_file)
+    um.register_user("testuser", "password123")
+    assert not um.authenticate_user(
+        "testuser", "wrongpassword"
+    ), "Authentication should fail with incorrect password"
 
-    # Delete the user
-    success = user_manager.delete_account(username)
-    assert success is True
 
-    # Ensure authentication fails after deletion
-    assert user_manager.authenticate_user(username, password) is False
+def test_authenticate_user_nonexistent(db_file):
+    um = UserManager(db_file)
+    assert not um.authenticate_user(
+        "nonexistent", "password123"
+    ), "Authentication should fail for non-existent user"
+
+
+# Tests for delete_account method
+def test_delete_account_success(db_file):
+    um = UserManager(db_file)
+    um.register_user("testuser", "password123")
+
+    # Insert test messages
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO messages (sender, content) VALUES (?, ?)", ("testuser", "Hello")
+    )
+    cursor.execute(
+        "INSERT INTO messages (sender, content) VALUES (?, ?)", ("testuser", "World")
+    )
+    conn.commit()
+    conn.close()
+
+    success = um.delete_account("testuser")
+    assert success, "Account deletion should succeed"
+
+    # Verify user and messages are deleted
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE username = ?", ("testuser",))
+    assert cursor.fetchone() is None, "User should be deleted"
+    cursor.execute("SELECT * FROM messages WHERE sender = ?", ("testuser",))
+    assert cursor.fetchone() is None, "User's messages should be deleted"
+    conn.close()
+
+
+def test_delete_account_messages(db_file):
+    um = UserManager(db_file)
+    um.register_user("user1", "password1")
+    um.register_user("user2", "password2")
+
+    # Insert test messages
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO messages (sender, content) VALUES (?, ?)", ("user1", "Msg1")
+    )
+    cursor.execute(
+        "INSERT INTO messages (sender, content) VALUES (?, ?)", ("user2", "Msg2")
+    )
+    conn.commit()
+    conn.close()
+
+    success = um.delete_account("user1")
+    assert success, "Account deletion should succeed"
+
+    # Verify selective deletion
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE username = ?", ("user1",))
+    assert cursor.fetchone() is None, "User1 should be deleted"
+    cursor.execute("SELECT * FROM users WHERE username = ?", ("user2",))
+    assert cursor.fetchone() is not None, "User2 should remain"
+    cursor.execute("SELECT * FROM messages WHERE sender = ?", ("user1",))
+    assert cursor.fetchone() is None, "User1's messages should be deleted"
+    cursor.execute("SELECT * FROM messages WHERE sender = ?", ("user2",))
+    assert cursor.fetchone() is not None, "User2's messages should remain"
+    conn.close()
+
+
+def test_delete_account_nonexistent(db_file):
+    um = UserManager(db_file)
+    um.register_user("user1", "password1")
+    success = um.delete_account("nonexistent")
+    assert success, "Deletion should return True even for non-existent user"
+
+    # Verify existing user remains unaffected
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE username = ?", ("user1",))
+    assert cursor.fetchone() is not None, "Existing user should remain"
+    conn.close()

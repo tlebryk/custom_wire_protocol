@@ -37,7 +37,7 @@ LAST_HEARTBEAT_TIME = time.time()
 LEADER_TIMEOUT_SECS = 5
 
 
-def transition_to_leader_mode():
+def transition_to_leader_mode(replica_addresses):
     """
     Transition the current replica process to leader mode:
     shuts down the replica services and starts the leader services.

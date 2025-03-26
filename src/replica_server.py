@@ -56,7 +56,7 @@ def transition_to_leader_mode(replica_addresses):
         "--port",
         "50051",
         "--replicas",
-        "localhost:50052,localhost:50053",
+        replica_addresses,
     ]
 
     logger.info(f"Executing leader mode with command: {new_args}")

@@ -94,7 +94,7 @@ class ElectionManager:
             return True
         else:
             self.logger.info(
-                f"This replica is not elected as leader. Leader is at {highest_id_addr} with ID {highest_id}"
+                f"This replica is not elected as leader. Leader is at {highest_id_addr} with ID {highest_id}. This is {self.local_replica_id}"
             )
             return False
 

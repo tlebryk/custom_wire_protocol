@@ -332,10 +332,13 @@ if __name__ == "__main__":
         help="Comma-separated list of replica addresses",
     )
     args = parser.parse_args()
+    replica_addresses = (
+        args.replicas.split(",") if args.replicas else ["localhost:50052"]
+    )
     serve(
         host=args.host,
         port=args.port,
         db_file=args.db_file,
         replica_id=args.replica_id,
-        replica_addresses=args.replicas,
+        replica_addresses=replica_addresses,
     )

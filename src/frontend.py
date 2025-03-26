@@ -854,7 +854,19 @@ if __name__ == "__main__":
         action="store_true",
         help="Whether to enable interceptors for gRPC requests.",
     )
+    # Add this to the argument parser in frontend.py
+    parser.add_argument(
+        "--replica_endpoints",
+        type=str,
+        default=None,
+        help="Comma-separated list of replica addresses (e.g., 'host1:port1,host2:port2')",
+    )
     args = parser.parse_args()
+    # Add this right after args = parser.parse_args()
+    if args.replica_endpoints:
+        args.replica_endpoints = args.replica_endpoints.split(",")
+    else:
+        args.replica_endpoints = []
     app = ChatApp(**vars(args))
     app.protocol("WM_DELETE_WINDOW", app.on_closing)
     app.mainloop()

@@ -1,12 +1,15 @@
 from tkinter import messagebox
 import logging
 import grpc
+import time
 
-# Import the generated gRPC modules
+# Import the generated gRPC modules for the leader service
 import protocols_pb2
 import protocols_pb2_grpc
-import grpc
-import logging
+
+# Also import the replica modules (for GetLeader RPC)
+import replica_pb2
+import replica_pb2_grpc
 
 
 class SizeLoggingClientInterceptor(
@@ -16,7 +19,6 @@ class SizeLoggingClientInterceptor(
     grpc.StreamStreamClientInterceptor,
 ):
     def intercept_unary_unary(self, continuation, client_call_details, request):
-        # Serialize the request to get its size.
         data = request.SerializeToString()
         size = len(data)
         logging.info(f"Sending unary_unary request of size: {size} bytes")
@@ -33,7 +35,6 @@ class SizeLoggingClientInterceptor(
     def intercept_stream_unary(
         self, continuation, client_call_details, request_iterator
     ):
-        # For stream requests, sum the sizes of all messages.
         total = 0
         for req in request_iterator:
             total += len(req.SerializeToString())
@@ -52,246 +53,208 @@ class SizeLoggingClientInterceptor(
 
 class GRPCClient:
     """
-    A simple gRPC client to interact with the MessagingService.
+    A simple gRPC client to interact with the MessagingService,
+    with automatic retries and leader discovery.
     """
 
-    def __init__(self, host="localhost", port=50051, intercept=True):
+    def __init__(
+        self, host="localhost", port=50051, intercept=True, replica_endpoints=None
+    ):
         """
         Initializes the gRPC client.
 
         Args:
-            host (str): The hostname of the gRPC server.
-            port (int): The port number of the gRPC server.
+            host (str): The hostname of the current leader.
+            port (int): The port number of the current leader.
+            intercept (bool): Whether to use interceptors.
+            replica_endpoints (list of str): A list of "host:port" strings for replica endpoints,
+                                             used for leader discovery.
         """
-        if intercept:
+        self.intercept = intercept
+        self.replica_endpoints = replica_endpoints or []
+        self.current_leader = f"{host}:{port}"
+        self._init_channel(self.current_leader)
+        self.username = None
+
+    def _init_channel(self, address):
+        if self.intercept:
             interceptors = [SizeLoggingClientInterceptor()]
         else:
             interceptors = []
-
         self.channel = grpc.intercept_channel(
-            grpc.insecure_channel(f"{host}:{port}"), *interceptors
+            grpc.insecure_channel(address), *interceptors
         )
         self.stub = protocols_pb2_grpc.MessagingServiceStub(self.channel)
+        logging.info("Initialized channel to %s", address)
+
+    def perform_rpc(self, rpc_func, max_retries=5, backoff=1):
+        """
+        Generic RPC retry wrapper.
+        Args:
+            rpc_func (callable): A zero-argument function that calls an RPC.
+            max_retries (int): Number of retries.
+            backoff (int): Base seconds for exponential backoff.
+        Returns:
+            The RPC response if successful, or None if all attempts fail.
+        """
+        attempts = 0
+        while attempts < max_retries:
+            try:
+                # Optionally, wait for the channel to be ready.
+                grpc.channel_ready_future(self.channel).result(timeout=2)
+                return rpc_func()
+            except grpc.RpcError as e:
+                if e.code() == grpc.StatusCode.UNAVAILABLE:
+                    attempts += 1
+                    logging.error(
+                        "RPC failed with UNAVAILABLE (attempt %d): %s", attempts, e
+                    )
+                    new_leader = self.discover_leader()
+                    if new_leader:
+                        self.update_channel(new_leader)
+                        logging.info("Updated leader address to: %s", new_leader)
+                    time.sleep(backoff * (2**attempts))
+                else:
+                    logging.error("RPC failed with non-retryable error: %s", e)
+                    return None
+        return None
+
+    def discover_leader(self):
+        """
+        Try to discover the new leader by querying the replica endpoints.
+        Returns:
+            The leader address as a string (e.g., "hostname:port") if discovered, else None.
+        """
+        for replica in self.replica_endpoints:
+            try:
+                temp_channel = grpc.insecure_channel(replica)
+                temp_stub = replica_pb2_grpc.ReplicaServiceStub(temp_channel)
+                response = temp_stub.GetLeader(
+                    replica_pb2.GetLeaderRequest(), timeout=2
+                )
+                if response and response.leader_address:
+                    logging.info(
+                        "Discovered leader %s from replica %s",
+                        response.leader_address,
+                        replica,
+                    )
+                    return response.leader_address
+            except grpc.RpcError as ex:
+                logging.error("Failed to get leader from %s: %s", replica, ex)
+        return None
+
+    def update_channel(self, leader_address):
+        """
+        Reinitialize the channel and stub with the new leader's address.
+        """
+        self.current_leader = leader_address
+        self._init_channel(leader_address)
+
+    # Now update RPC methods to use perform_rpc:
 
     def login(self, username: str, password: str):
-        """
-        Logs in a user.
-
-        Args:
-            username (str): The username of the user.
-            password (str): The password of the user.
-
-        Returns:
-            LoginResponse: The response from the gRPC server.
-        """
-        try:
+        def rpc_func():
             request = protocols_pb2.LoginRequest(username=username, password=password)
-            response = self.stub.Login(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("Login RPC failed: %s", e)
-            return None
+            return self.stub.Login(request)
+
+        return self.perform_rpc(rpc_func)
 
     def register(self, username: str, password: str):
-        """
-        Registers a new user.
-
-        Args:
-            username (str): The username to register.
-            password (str): The password for the new account.
-
-        Returns:
-            RegisterResponse: The response from the gRPC server.
-        """
-        try:
+        def rpc_func():
             request = protocols_pb2.RegisterRequest(
                 username=username, password=password
             )
-            response = self.stub.Register(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("Register RPC failed: %s", e)
-            return None
+            return self.stub.Register(request)
+
+        return self.perform_rpc(rpc_func)
 
     def send_message(self, message: str, receiver: str):
-        """
-        Sends a message to a specified receiver.
-
-        Args:
-            message (str): The message content.
-            receiver (str): The recipient of the message.
-
-        Returns:
-            SendMessageResponse: The response from the gRPC server.
-        """
-        try:
+        def rpc_func():
             request = protocols_pb2.SendMessageRequest(
                 message=message, receiver=receiver
             )
-            response = self.stub.SendMessage(
-                request, metadata=(("sender", self.username),)
-            )
-            return response
-        except grpc.RpcError as e:
-            logging.error("SendMessage RPC failed: %s", e)
-            return None
+            return self.stub.SendMessage(request, metadata=(("sender", self.username),))
+
+        return self.perform_rpc(rpc_func)
 
     def get_recent_messages(self, username: str):
-        """
-        Retrieves recent messages for a given user.
-
-        Args:
-            username (str): The username whose messages are requested.
-
-        Returns:
-            GetRecentMessagesResponse: The response from the gRPC server.
-        """
-        try:
+        def rpc_func():
             request = protocols_pb2.GetRecentMessagesRequest(username=username)
-            response = self.stub.GetRecentMessages(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("GetRecentMessages RPC failed: %s", e)
-            return None
+            return self.stub.GetRecentMessages(request)
+
+        return self.perform_rpc(rpc_func)
 
     def get_unread_messages(self, username: str):
-        """
-        Retrieves unread messages for a given user.
-
-        Args:
-            username (str): The username whose unread messages are requested.
-
-        Returns:
-            GetUnreadMessagesResponse: The response from the gRPC server.
-        """
-        try:
+        def rpc_func():
             request = protocols_pb2.GetUnreadMessagesRequest(username=username)
-            response = self.stub.GetUnreadMessages(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("GetUnreadMessages RPC failed: %s", e)
-            return None
+            return self.stub.GetUnreadMessages(request)
+
+        return self.perform_rpc(rpc_func)
 
     def mark_as_read(self, message_ids: list):
-        """
-        Marks messages as read.
-
-        Args:
-            message_ids (list): A list of message IDs to mark as read.
-
-        Returns:
-            MarkAsReadResponse: The response from the gRPC server.
-        """
-        try:
+        def rpc_func():
             request = protocols_pb2.MarkAsReadRequest(message_ids=message_ids)
-            response = self.stub.MarkAsRead(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("MarkAsRead RPC failed: %s", e)
-            return None
+            return self.stub.MarkAsRead(request)
+
+        return self.perform_rpc(rpc_func)
 
     def set_n_unread_messages(self, username: str, n: int):
-        """
-        Sets the number of unread messages for a user.
-
-        Args:
-            username (str): The username to update.
-            n (int): The number of unread messages.
-
-        Returns:
-            SetNUnreadMessagesResponse: The response from the gRPC server.
-        """
-        try:
+        def rpc_func():
             request = protocols_pb2.SetNUnreadMessagesRequest(
                 username=username, n_unread_messages=n
             )
-            response = self.stub.SetNUnreadMessages(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("SetNUnreadMessages RPC failed: %s", e)
-            return None
+            return self.stub.SetNUnreadMessages(request)
+
+        return self.perform_rpc(rpc_func)
 
     def delete_message(self, username: str, message_id: int):
-        """
-        Deletes a specific message for a user.
-
-        Args:
-            username (str): The username owning the message.
-            message_id (int): The ID of the message to delete.
-
-        Returns:
-            DeleteMessageResponse: The response from the gRPC server.
-        """
-        try:
+        def rpc_func():
             request = protocols_pb2.DeleteMessageRequest(
                 username=username, message_id=message_id
             )
-            response = self.stub.DeleteMessage(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("DeleteMessage RPC failed: %s", e)
-            return None
+            return self.stub.DeleteMessage(request)
+
+        return self.perform_rpc(rpc_func)
 
     def delete_account(self, username: str):
-        """
-        Deletes a user account.
-
-        Args:
-            username (str): The username of the account to delete.
-
-        Returns:
-            DeleteAccountResponse: The response from the gRPC server.
-        """
-        try:
+        def rpc_func():
             request = protocols_pb2.DeleteAccountRequest(username=username)
-            response = self.stub.DeleteAccount(request)
-            return response
-        except grpc.RpcError as e:
-            logging.error("DeleteAccount RPC failed: %s", e)
-            return None
+            return self.stub.DeleteAccount(request)
+
+        return self.perform_rpc(rpc_func)
 
     def subscribe(self, username: str):
         """
-        Subscribes to user updates.
-
-        Args:
-            username (str): The username to subscribe to.
-
-        Returns:
-            SubscribeResponse: The response from the gRPC server.
+        Subscribes to user updates. For streaming RPCs, you may want to handle
+        reconnection separately if needed.
         """
-        try:
+
+        def rpc_func():
             request = protocols_pb2.SubscribeRequest(username=username)
             return self.stub.Subscribe(request)
-        except grpc.RpcError as e:
-            logging.error("Subscribe RPC failed: %s", e)
-            return None
+
+        # For simplicity, we wrap the initial subscribe call with perform_rpc.
+        stream = self.perform_rpc(rpc_func)
+        if stream is None:
+            logging.error("Subscribe RPC failed after retries.")
+        return stream
 
     def get_users(self, username: str):
-        """
-        Retrieves a list of users.
-
-        Args:
-            username (str): The username requesting the list.
-
-        Returns:
-            list: A list of usernames.
-        """
-        try:
+        def rpc_func():
             request = protocols_pb2.GetUsersRequest(username=username)
-            response = self.stub.GetUsers(request)
-            if response.status == "success":
-                return list(response.usernames)
-            else:
-                return []
-        except grpc.RpcError as e:
-            logging.error("GetUsers RPC failed: %s", e)
-            return []
+            return self.stub.GetUsers(request)
+
+        response = self.perform_rpc(rpc_func)
+        if response and response.status == "success":
+            return list(response.usernames)
+        return []
 
     def search_users(self, query):
-        request = protocols_pb2.SearchUsersRequest(query=query)
-        response = self.stub.SearchUsers(request)
-        if response.status == "success":
+        def rpc_func():
+            request = protocols_pb2.SearchUsersRequest(query=query)
+            return self.stub.SearchUsers(request)
+
+        response = self.perform_rpc(rpc_func)
+        if response and response.status == "success":
             return response.usernames
-        else:
-            return []
+        return []

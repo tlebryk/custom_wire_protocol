@@ -34,7 +34,7 @@ user_manager = UserManager(replica_db_file)
 
 # Global variable to track heartbeat status
 LAST_HEARTBEAT_TIME = time.time()
-LEADER_TIMEOUT_SECS = 10
+LEADER_TIMEOUT_SECS = 5
 
 
 def transition_to_leader_mode():

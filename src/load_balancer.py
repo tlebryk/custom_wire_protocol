@@ -171,10 +171,9 @@ def serve_load_balancer(
     logging.info("Load balancer running on %s", server_address)
     server.start()
     try:
-        while True:
-            time.sleep(60)
+        server.wait_for_termination()
     except KeyboardInterrupt:
-        logging.info("Load balancer shutting down.")
+        logging.info("KeyboardInterrupt detected: shutting down load balancer.")
         server.stop(0)
 
 

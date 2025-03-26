@@ -8,3 +8,20 @@ python src/replica_server.py --port 50053 --db-file replica_chat_app2.db --repli
 python src/load_balancer.py --lb_host 10.250.34.106 --lb_port 50055 --replica_endpoints 10.250.164.247:50052,10.250.164.247:50053,10.250.34.106:50056
 python src/replica_server.py --port 50056 --db-file replica_chat_app3.db --replica-id 3 --replicas 10.250.164.247:50052,10.250.164.247:50053,10.250.34.106:50056 --external-host 10.250.34.106
 python src/frontend.py --lb_addresses 10.250.164.247:50050,10.250.164.247:50054,10.250.34.106:50055
+
+
+
+LOCAL TEST
+python src/load_balancer.py  --lb_host localhost  --lb_port 50050  --replica_endpoints localhost:50052,localhost:50053,localhost:50056  --lb_id 1  --lb_election_endpoints localhost:50050,localhost:50054,localhost:50055  --vip 127.0.0.1  --vip_interface lo
+
+python src/load_balancer.py  --lb_host localhost  --lb_port 50054  --replica_endpoints localhost:50052,localhost:50053,localhost:50056  --lb_id 2  --lb_election_endpoints localhost:50050,localhost:50054,localhost:50055  --vip 127.0.0.1  --vip_interface lo
+
+python src/load_balancer.py  --lb_host localhost  --lb_port 50055  --replica_endpoints localhost:50052,localhost:50053,localhost:50056  --lb_id 3  --lb_election_endpoints localhost:50050,localhost:50054,localhost:50055  --vip 127.0.0.1  --vip_interface lo
+
+python src/replica_server.py  --port 50052  --db-file replica_chat_app1.db  --replica-id 1  --replicas localhost:50052,localhost:50053,localhost:50056  --external-host localhost
+
+python src/replica_server.py  --port 50053  --db-file replica_chat_app2.db  --replica-id 2  --replicas localhost:50052,localhost:50053,localhost:50056  --external-host localhost
+
+python src/replica_server.py  --port 50056  --db-file replica_chat_app3.db  --replica-id 3  --replicas localhost:50052,localhost:50053,localhost:50056  --external-host localhost
+
+python src/frontend.py --lb_addresses 127.0.0.1:50050

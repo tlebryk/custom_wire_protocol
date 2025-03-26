@@ -32,7 +32,7 @@ def mock_client(mock_channel, mock_stub):
     with patch("grpc.insecure_channel", return_value=mock_channel), patch(
         "grpc.intercept_channel", return_value=mock_channel
     ), patch.object(protocols_pb2_grpc, "MessagingServiceStub", return_value=mock_stub):
-        client = GRPCClient(host="localhost", port=50051)
+        client = GRPCClient()
         client.username = "testuser"
         return client
 
@@ -129,7 +129,7 @@ class TestGRPCClient:
             protocols_pb2_grpc, "MessagingServiceStub", return_value=mock_stub
         ):
 
-            client = GRPCClient(host="testhost", port=12345)
+            client = GRPCClient()
 
             assert client.current_leader == "testhost:12345"
             assert client.channel == mock_channel
@@ -144,7 +144,7 @@ class TestGRPCClient:
         ):
 
             replicas = ["replica1:50051", "replica2:50052"]
-            client = GRPCClient(host="testhost", port=12345, replica_endpoints=replicas)
+            client = GRPCClient()
 
             assert client.replica_endpoints == replicas
 
@@ -574,7 +574,7 @@ def test_client_with_interceptor(
     mock_insecure_channel.return_value = mock_channel
     mock_intercept_channel.return_value = mock_channel
 
-    client = GRPCClient(host="localhost", port=50051, intercept=True)
+    client = GRPCClient()
 
     # Verify that intercept_channel was called with SizeLoggingClientInterceptor
     mock_intercept_channel.assert_called_once()
@@ -636,12 +636,7 @@ def test_retry_with_leader_discovery_integration(mock_insecure_channel, mock_sle
         mock_replica_stub_cls.return_value = mock_replica_stub
 
         # Create client with replicas
-        client = GRPCClient(
-            host="localhost",
-            port=50051,
-            intercept=False,
-            replica_endpoints=["replica:50052"],
-        )
+        client = GRPCClient()
 
         # Test get_users which should fail on first leader, discover new leader, and succeed
         users = client.get_users("testuser")

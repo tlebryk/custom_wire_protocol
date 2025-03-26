@@ -2,6 +2,7 @@
 import pytest
 import tkinter as tk
 from types import SimpleNamespace
+from time import sleep
 
 # Import the module to test.
 import frontend
@@ -17,11 +18,13 @@ class FakeResponse:
         self.message = message
         self.username = username
         self.messages = messages or []
+        sleep(0.5)
 
 
 class FakeGRPCClient:
     def __init__(self):
         self.username = ""
+        sleep(0.5)
 
     def login(self, username, password):
         if username == "valid" and password == "valid":
@@ -43,7 +46,7 @@ class FakeGRPCClient:
         # Return a dummy recent message
         msg = SimpleNamespace(
             timestamp="2025-02-25T12:00:00.000000+0000",
-            **{sender: "alice", "message": "hello", "id": 1},
+            **{"sender": "alice", "message": "hello", "id": 1},
         )
 
         class Dummy:
@@ -55,7 +58,7 @@ class FakeGRPCClient:
     def get_unread_messages(self, username):
         msg = SimpleNamespace(
             timestamp="2025-02-25T12:00:00.000000+0000",
-            **{sender: "bob", "message": "hi", "id": 2},
+            **{"sender": "bob", "message": "hi", "id": 2},
         )
 
         class Dummy:
@@ -94,6 +97,7 @@ def app(monkeypatch):
     # Replace the GRPCClient in the frontend module with our fake
     monkeypatch.setattr(frontend, "GRPCClient", FakeGRPCClient)
     # Create the ChatApp instance
+    sleep(0.5)
     app = frontend.ChatApp()
     yield app
     # Clean up the Tk instance
@@ -135,27 +139,27 @@ def test_register_success(app, fake_messagebox):
     assert any("Registration Succeeded" in msg for typ, _, msg in messages)
 
 
-# def test_login_success(app, fake_messagebox):
-#     login_form = app.auth_box.login_form
-#     login_form.username_entry.insert(0, "valid")
-#     login_form.password_entry.insert(0, "valid")
-#     # Call the login command
-#     login_form.login()
+def test_login_success(app, fake_messagebox):
+    login_form = app.auth_box.login_form
+    login_form.username_entry.insert(0, "valid")
+    login_form.password_entry.insert(0, "valid")
+    # Call the login command
+    login_form.login()
 
-#     # Process pending UI events.
-#     app.update()
+    # Process pending UI events.
+    app.update()
 
-#     # After a successful login, the ChatApp should switch to the chat screen.
-#     # We can check that certain UI components are now visible.
-#     assert not app.auth_box.login_form.winfo_ismapped()
-#     assert app.chat_box.winfo_ismapped()
+    # After a successful login, the ChatApp should switch to the chat screen.
+    # We can check that certain UI components are now visible.
+    assert not app.auth_box.login_form.winfo_ismapped()
+    assert app.chat_box.winfo_ismapped()
 
-#     # Check that an info messagebox with success message was shown.
-#     messages = fake_messagebox
-#     assert any("Login Successful" in msg for typ, _, msg in messages)
+    # Check that an info messagebox with success message was shown.
+    messages = fake_messagebox
+    assert any("Login Successful" in msg for typ, _, msg in messages)
 
-#     # Also verify that the fake client’s username was set.
-#     assert app.grpc_client.username == "valid"
+    # Also verify that the fake client’s username was set.
+    assert app.grpc_client.username == "valid"
 
 
 def test_login_failure(app, fake_messagebox):
@@ -169,26 +173,26 @@ def test_login_failure(app, fake_messagebox):
     assert any("Invalid credentials" in msg for typ, _, msg in messages)
 
 
-# def test_send_message(app, fake_messagebox):
-#     # Simulate that the user is already logged in.
-#     app.grpc_client.username = "valid"
-#     app.chat_box.username = "valid"
+def test_send_message(app, fake_messagebox):
+    # Simulate that the user is already logged in.
+    app.grpc_client.username = "valid"
+    app.chat_box.username = "valid"
 
-#     # Set up the OptionMenu to select a receiver.
-#     app.chat_box.user_list = ["user1", "user2"]
-#     app.chat_box.selected_user.set("user1")
-#     # Insert a message.
-#     app.chat_box.message_text.insert(0, "Hello there!")
+    # Set up the OptionMenu to select a receiver.
+    app.chat_box.user_list = ["user1", "user2"]
+    app.chat_box.selected_user.set("user1")
+    # Insert a message.
+    app.chat_box.message_text.insert(0, "Hello there!")
 
-#     # Call send_message
-#     app.chat_box.send_message()
+    # Call send_message
+    app.chat_box.send_message()
 
-#     messages = fake_messagebox
-#     # Check that an info messagebox with the send confirmation was shown.
-#     assert any("Message sent to user1" in msg for typ, _, msg in messages)
+    messages = fake_messagebox
+    # Check that an info messagebox with the send confirmation was shown.
+    assert any("Message sent to user1" in msg for typ, _, msg in messages)
 
-#     # Also verify that the message entry was cleared.
-#     assert app.chat_box.message_text.get() == ""
+    # Also verify that the message entry was cleared.
+    assert app.chat_box.message_text.get() == ""
 
 
 def test_fetch_users(app):
@@ -215,41 +219,41 @@ def test_set_unread_messages(app, fake_messagebox):
     assert any("display 3 unread messages" in msg for typ, _, msg in messages)
 
 
-# def test_mark_message_as_read(app, fake_messagebox):
-#     # Simulate that the user is logged in.
-#     app.grpc_client.username = "valid"
+def test_mark_message_as_read(app, fake_messagebox):
+    # Simulate that the user is logged in.
+    app.grpc_client.username = "valid"
 
-#     # Create a dummy unread message and add it to the messages container.
-#     dummy_msg = {
-#         "timestamp": "2025-02-25T12:00:00.000000+0000",
-#         sender: "bob",
-#         "message": "Test unread message",
-#         "id": 999,
-#     }
-#     # Call add_unread_message which creates a frame in the unread section.
-#     app.messages_container.add_unread_message(dummy_msg)
-#     # Retrieve the frame corresponding to the dummy message.
-#     msg_frame = app.messages_container.unread_messages_dict.get(999)
-#     assert msg_frame is not None
+    # Create a dummy unread message and add it to the messages container.
+    dummy_msg = {
+        "timestamp": "2025-02-25T12:00:00.000000+0000",
+        "sender": "bob",
+        "message": "Test unread message",
+        "id": 999,
+    }
+    # Call add_unread_message which creates a frame in the unread section.
+    app.messages_container.add_unread_message(dummy_msg)
+    # Retrieve the frame corresponding to the dummy message.
+    msg_frame = app.messages_container.unread_messages_dict.get(999)
+    assert msg_frame is not None
 
-#     # Now call read_message directly to simulate the user clicking "Read".
-#     app.messages_container.read_message(999, msg_frame)
+    # Now call read_message directly to simulate the user clicking "Read".
+    app.messages_container.read_message(999, msg_frame)
 
-#     # The unread message should be removed.
-#     assert 999 not in app.messages_container.unread_messages_dict
+    # The unread message should be removed.
+    assert 999 not in app.messages_container.unread_messages_dict
 
 
-# def test_delete_account(app, fake_messagebox, monkeypatch):
-#     # Simulate a logged-in user.
-#     app.grpc_client.username = "valid"
-#     app.delete_account_container.username = "valid"
+def test_delete_account(app, fake_messagebox, monkeypatch):
+    # Simulate a logged-in user.
+    app.grpc_client.username = "valid"
+    app.delete_account_container.username = "valid"
 
-#     # Monkey-patch messagebox.askyesno to automatically return True (simulate confirmation).
-#     monkeypatch.setattr(frontend.messagebox, "askyesno", lambda title, msg: True)
+    # Monkey-patch messagebox.askyesno to automatically return True (simulate confirmation).
+    monkeypatch.setattr(frontend.messagebox, "askyesno", lambda title, msg: True)
 
-#     # Call delete_account.
-#     app.delete_account_container.delete_account()
+    # Call delete_account.
+    app.delete_account_container.delete_account()
 
-#     messages = fake_messagebox
-#     # Check that an info messagebox was shown indicating account deletion.
-#     assert any("Account Deleted" in msg for typ, _, msg in messages)
+    messages = fake_messagebox
+    # Check that an info messagebox was shown indicating account deletion.
+    assert any("Account Deleted" in msg for typ, _, msg in messages)

@@ -1,3 +1,62 @@
+10.250.164.247 
+python src/load_balancer.py \
+  --lb_host 10.250.164.247 \
+  --lb_port 50054 \
+  --replica_endpoints 10.250.164.247:50052,10.250.164.247:50053,10.250.34.106:50056 \
+  --lb_id 2 \
+  --lb_election_endpoints 10.250.164.247:50050,10.250.164.247:50054,10.250.34.106:50055 \
+  --vip 10.250.100.100 \
+  --vip_interface eth0
+
+python src/load_balancer.py \
+  --lb_host 10.250.164.247 \
+  --lb_port 50054 \
+  --replica_endpoints 10.250.164.247:50052,10.250.164.247:50053,10.250.34.106:50056 \
+  --lb_id 2 \
+  --lb_election_endpoints 10.250.164.247:50050,10.250.164.247:50054,10.250.34.106:50055 \
+  --vip 10.250.100.100 \
+  --vip_interface eth0
+
+python src/replica_server.py \
+  --port 50052 \
+  --db-file replica_chat_app1.db \
+  --replica-id 1 \
+  --replicas 10.250.164.247:50052,10.250.164.247:50053,10.250.34.106:50056 \
+  --external-host 10.250.164.247
+
+python src/replica_server.py \
+  --port 50053 \
+  --db-file replica_chat_app2.db \
+  --replica-id 2 \
+  --replicas 10.250.164.247:50052,10.250.164.247:50053,10.250.34.106:50056 \
+  --external-host 10.250.164.247
+
+10.250.34.106
+
+python src/load_balancer.py \
+  --lb_host 10.250.34.106 \
+  --lb_port 50055 \
+  --replica_endpoints 10.250.164.247:50052,10.250.164.247:50053,10.250.34.106:50056 \
+  --lb_id 3 \
+  --lb_election_endpoints 10.250.164.247:50050,10.250.164.247:50054,10.250.34.106:50055 \
+  --vip 10.250.100.100 \
+  --vip_interface eth0
+
+
+python src/replica_server.py \
+  --port 50056 \
+  --db-file replica_chat_app3.db \
+  --replica-id 3 \
+  --replicas 10.250.164.247:50052,10.250.164.247:50053,10.250.34.106:50056 \
+  --external-host 10.250.34.106
+
+python src/frontend.py --lb_addresses 10.250.100.100:50050
+
+
+
+
+
+
 machine1
 python src/load_balancer.py --lb_host 10.250.164.247 --lb_port 50050 --replica_endpoints 10.250.164.247:50052,10.250.164.247:50053,10.250.34.106:50056
 python src/load_balancer.py --lb_host 10.250.164.247 --lb_port 50054 --replica_endpoints 10.250.164.247:50052,10.250.164.247:50053,10.250.34.106:50056

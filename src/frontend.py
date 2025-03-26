@@ -3,13 +3,8 @@ import tkinter as tk
 from tkinter import messagebox
 import logging
 import threading
-import os
-import datetime
 import argparse
-
-# Import the generated gRPC modules
-
-from typing import Dict, Any, Optional, List, Union, Literal
+from typing import Dict, Any, Literal
 from client import GRPCClient
 
 logging.basicConfig(
@@ -24,20 +19,13 @@ class ChatApp(tk.Tk):
     """
 
     def __init__(self, **grpc_client_kwargs):
-        """
-        Initializes the ChatApp GUI and its components.
-
-        Args:
-            mode (str, optional): The mode of the application (default is determined by environment variable `MODE`).
-        """
         super().__init__()
         self.title("gRPC Chat - Registration and Login")
         self.geometry("800x800")
         self.resizable(True, True)
 
-        # Initialize gRPC client
+        # Initialize GRPC client using multiple load balancer addresses.
         self.grpc_client = GRPCClient(**grpc_client_kwargs)
-        # We'll set the client's username after login.
         self.grpc_client.username = ""
 
         # Create Authentication Box
@@ -51,27 +39,18 @@ class ChatApp(tk.Tk):
         self.delete_account_container = DeleteAccountContainer(self)
 
     def start_message_listener(self, username: str):
-        """
-        Starts a thread that subscribes for incoming messages and updates the UI.
-
-        Args:
-            username (str): The username for subscribing to new messages.
-        """
-
         def listen():
             subscribe_iter = self.grpc_client.subscribe(username)
             if subscribe_iter is None:
                 logging.error("Subscribe iterator is None")
                 return
             for received_msg in subscribe_iter:
-                # Convert ReceivedMessage proto to dict.
                 msg_dict = {
                     "timestamp": received_msg.timestamp,
-                    "sender": getattr(received_msg, "sender"),
+                    "sender": received_msg.sender,
                     "message": received_msg.message,
                     "id": received_msg.id,
                 }
-                # Schedule UI update on the main thread.
                 self.after(
                     0, lambda m=msg_dict: self.messages_container.add_unread_message(m)
                 )
@@ -838,35 +817,22 @@ class NNewMessages(tk.Frame):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--host",
+        "--lb_addresses",
         type=str,
-        default="localhost",
-        help="The hostname of the gRPC server.",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=50051,
-        help="The port number of the gRPC server.",
+        default="localhost:50050,localhost:50054,localhost:50055",
+        help="Comma-separated list of load balancer addresses (e.g., 'host1:port,host2:port,host3:port').",
     )
     parser.add_argument(
         "--intercept",
         action="store_true",
         help="Whether to enable interceptors for gRPC requests.",
     )
-    # Add this to the argument parser in frontend.py
-    parser.add_argument(
-        "--replica_endpoints",
-        type=str,
-        default=None,
-        help="Comma-separated list of replica addresses (e.g., 'host1:port1,host2:port2')",
-    )
     args = parser.parse_args()
-    # Add this right after args = parser.parse_args()
-    if args.replica_endpoints:
-        args.replica_endpoints = args.replica_endpoints.split(",")
-    else:
-        args.replica_endpoints = []
-    app = ChatApp(**vars(args))
+
+    # Convert the comma-separated string into a list.
+    lb_addresses = args.lb_addresses.split(",")
+
+    # Pass the load balancer addresses and intercept flag to the GRPC client.
+    app = ChatApp(lb_addresses=lb_addresses, intercept=args.intercept)
     app.protocol("WM_DELETE_WINDOW", app.on_closing)
     app.mainloop()

@@ -1,15 +1,10 @@
-# client.py
+# client.py (modified snippet)
 import logging
 import grpc
 import time
 
-# Import the generated gRPC modules for the leader service
 import protocols_pb2
 import protocols_pb2_grpc
-
-# Also import the replica modules (for GetLeader RPC)
-import replica_pb2
-import replica_pb2_grpc
 
 
 class SizeLoggingClientInterceptor(
@@ -18,6 +13,7 @@ class SizeLoggingClientInterceptor(
     grpc.StreamUnaryClientInterceptor,
     grpc.StreamStreamClientInterceptor,
 ):
+    # (Interceptor code remains unchanged)
     def intercept_unary_unary(self, continuation, client_call_details, request):
         data = request.SerializeToString()
         size = len(data)
@@ -25,55 +21,27 @@ class SizeLoggingClientInterceptor(
         response = continuation(client_call_details, request)
         return response
 
-    def intercept_unary_stream(self, continuation, client_call_details, request):
-        data = request.SerializeToString()
-        size = len(data)
-        logging.info(f"Sending unary_stream request of size: {size} bytes")
-        response_it = continuation(client_call_details, request)
-        return response_it
-
-    def intercept_stream_unary(
-        self, continuation, client_call_details, request_iterator
-    ):
-        total = 0
-        for req in request_iterator:
-            total += len(req.SerializeToString())
-        logging.info(f"Sending stream_unary request total size: {total} bytes")
-        return continuation(client_call_details, request_iterator)
-
-    def intercept_stream_stream(
-        self, continuation, client_call_details, request_iterator
-    ):
-        total = 0
-        for req in request_iterator:
-            total += len(req.SerializeToString())
-        logging.info(f"Sending stream_stream request total size: {total} bytes")
-        return continuation(client_call_details, request_iterator)
+    # ... (other interceptor methods)
 
 
 class GRPCClient:
     """
-    A simple gRPC client to interact with the MessagingService,
-    with automatic retries and leader discovery.
+    A gRPC client that connects to one of multiple load balancer addresses.
+    If one load balancer fails, it will rotate to the next available address.
     """
 
-    def __init__(
-        self, host="localhost", port=50051, intercept=True, replica_endpoints=None
-    ):
+    def __init__(self, lb_addresses=None, intercept=True):
         """
-        Initializes the gRPC client.
-
         Args:
-            host (str): The hostname of the current leader.
-            port (int): The port number of the current leader.
+            lb_addresses (list of str): List of load balancer addresses (e.g., ["host1:port", "host2:port"]).
             intercept (bool): Whether to use interceptors.
-            replica_endpoints (list of str): A list of "host:port" strings for replica endpoints,
-                                             used for leader discovery.
         """
+        if lb_addresses is None:
+            lb_addresses = ["localhost:50051"]
         self.intercept = intercept
-        self.replica_endpoints = replica_endpoints or []
-        self.current_leader = f"{host}:{port}"
-        self._init_channel(self.current_leader)
+        self.lb_addresses = lb_addresses
+        self.current_lb_index = 0
+        self._init_channel(self.lb_addresses[self.current_lb_index])
         self.username = None
 
     def _init_channel(self, address):
@@ -89,18 +57,11 @@ class GRPCClient:
 
     def perform_rpc(self, rpc_func, max_retries=5, backoff=1):
         """
-        Generic RPC retry wrapper.
-        Args:
-            rpc_func (callable): A zero-argument function that calls an RPC.
-            max_retries (int): Number of retries.
-            backoff (int): Base seconds for exponential backoff.
-        Returns:
-            The RPC response if successful, or None if all attempts fail.
+        Generic RPC retry wrapper that rotates through load balancer addresses.
         """
         attempts = 0
         while attempts < max_retries:
             try:
-                # Optionally, wait for the channel to be ready.
                 grpc.channel_ready_future(self.channel).result(timeout=2)
                 return rpc_func()
             except grpc.RpcError as e:
@@ -109,49 +70,20 @@ class GRPCClient:
                     logging.error(
                         "RPC failed with UNAVAILABLE (attempt %d): %s", attempts, e
                     )
-                    new_leader = self.discover_leader()
-                    if new_leader:
-                        self.update_channel(new_leader)
-                        logging.info("Updated leader address to: %s", new_leader)
+                    # Rotate to the next load balancer
+                    self.current_lb_index = (self.current_lb_index + 1) % len(
+                        self.lb_addresses
+                    )
+                    new_lb = self.lb_addresses[self.current_lb_index]
+                    logging.info("Switching to backup load balancer: %s", new_lb)
+                    self._init_channel(new_lb)
                     time.sleep(backoff * (2**attempts))
                 else:
                     logging.error("RPC failed with non-retryable error: %s", e)
                     return None
         return None
 
-    def discover_leader(self):
-        """
-        Try to discover the new leader by querying the replica endpoints.
-        Returns:
-            The leader address as a string (e.g., "hostname:port") if discovered, else None.
-        """
-        for replica in self.replica_endpoints:
-            try:
-                temp_channel = grpc.insecure_channel(replica)
-                temp_stub = replica_pb2_grpc.ReplicaServiceStub(temp_channel)
-                response = temp_stub.GetLeader(
-                    replica_pb2.GetLeaderRequest(), timeout=2
-                )
-                if response and response.leader_address:
-                    logging.info(
-                        "Discovered leader %s from replica %s",
-                        response.leader_address,
-                        replica,
-                    )
-                    return response.leader_address
-            except grpc.RpcError as ex:
-                logging.error("Failed to get leader from %s: %s", replica, ex)
-        return None
-
-    def update_channel(self, leader_address):
-        """
-        Reinitialize the channel and stub with the new leader's address.
-        """
-        self.current_leader = leader_address
-        self._init_channel(leader_address)
-
-    # Now update RPC methods to use perform_rpc:
-
+    # RPC methods remain unchanged and use self.stub
     def login(self, username: str, password: str):
         def rpc_func():
             request = protocols_pb2.LoginRequest(username=username, password=password)
@@ -224,16 +156,10 @@ class GRPCClient:
         return self.perform_rpc(rpc_func)
 
     def subscribe(self, username: str):
-        """
-        Subscribes to user updates. For streaming RPCs, you may want to handle
-        reconnection separately if needed.
-        """
-
         def rpc_func():
             request = protocols_pb2.SubscribeRequest(username=username)
             return self.stub.Subscribe(request)
 
-        # For simplicity, we wrap the initial subscribe call with perform_rpc.
         stream = self.perform_rpc(rpc_func)
         if stream is None:
             logging.error("Subscribe RPC failed after retries.")

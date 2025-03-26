@@ -75,6 +75,7 @@ Run the following command to start the backend server:
 
 ```bash
 # Then start the main server, using localhost for replica addresses
+python src/load_balancer.py --lb_host 0.0.0.0 --lb_port 50051 --replica_endpoints localhost:50052,localhost:50053
 python src/server.py --port 50051 --replicas localhost:50052,localhost:50053
 # Start the replica servers first
 python src/replica_server.py --port 50052 --db-file replica1_chat_app1.db --replica-id 1  --replicas localhost:50052,localhost:50053
@@ -168,3 +169,15 @@ Where 172.11.11.1 is the server's IP address.
 ## Engineering notebook: 
 
 https://docs.google.com/document/d/1uck1DvlR-E-yDYn41MySBpTcRAgNvV6-UusJmBGb9u4/edit?usp=sharing
+
+
+
+python src/load_balancer.py --lb_host 0.0.0.0 --lb_port 50050 --replica_endpoints localhost:50052,localhost:50053,localhost:50056
+python src/load_balancer.py --lb_host 0.0.0.0 --lb_port 50054 --replica_endpoints localhost:50052,localhost:50053,localhost:50056
+python src/load_balancer.py --lb_host 0.0.0.0 --lb_port 50055 --replica_endpoints localhost:50052,localhost:50053,localhost:50056
+
+python src/replica_server.py --port 50052 --db-file replica1_chat_app1.db --replica-id 1 --replicas localhost:50052,localhost:50053,localhost:50056
+python src/replica_server.py --port 50053 --db-file replica1_chat_app2.db --replica-id 2 --replicas localhost:50052,localhost:50053,localhost:50056
+python src/replica_server.py --port 50056 --db-file replica1_chat_app3.db --replica-id 3 --replicas localhost:50052,localhost:50053,localhost:50056
+
+python src/frontend.py --lb_addresses localhost:50050,localhost:50054,localhost:50055

@@ -81,7 +81,8 @@ def monitor_leader(election_manager, check_interval=10):
             # election_manager.elect_leader() returns True if this replica should become leader.
             if election_manager.elect_leader():
                 logger.info("I have been elected as the new leader!")
-                transition_to_leader_mode()
+                replica_addresses_str = ",".join(ALL_REPLICA_ADDRESSES)
+                transition_to_leader_mode(replica_addresses=replica_addresses_str)
                 break  # Exit the monitor loop once we transition to leader mode.
             else:
                 logger.info("Leader election check: still not leader.")

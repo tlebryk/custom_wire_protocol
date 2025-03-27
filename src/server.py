@@ -2,9 +2,9 @@
 import argparse
 import logging
 import os
+import socket
 import threading
 import time
-import socket
 from concurrent import futures
 from datetime import datetime
 
@@ -14,11 +14,7 @@ import protocols_pb2
 import protocols_pb2_grpc
 import replica_pb2
 import replica_pb2_grpc
-from database import Database
 from logger import setup_logger
-from replication_manager import ReplicationManager
-from server_intercepter import SizeLoggingServerInterceptor
-from users import UserManager
 
 # Import the refactored MessagingServiceServicer
 from messaging_service_servicer import MessagingServiceServicer

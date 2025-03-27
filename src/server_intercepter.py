@@ -3,6 +3,9 @@ import grpc
 import logging
 
 
+# deprecated for replica server milestone.
+# legacy for testing size of packets.
+@DeprecationWarning
 class SizeLoggingServerInterceptor(grpc.ServerInterceptor):
     def intercept_service(self, continuation, handler_call_details):
         handler = continuation(handler_call_details)

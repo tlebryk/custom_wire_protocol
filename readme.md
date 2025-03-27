@@ -1,6 +1,6 @@
 # gRPC Wire Protocol Chat Application
 
-This repository contains a basic server, a graphical client interface, and to create a messaging service using gRPC. 
+This repository contains code for a simple messaging service using gRPC. This includes a graphical client interface/client, load balancer, and persistent backend system. A frontend client connects to a load balancer who tracks a "leader" server. The leader server has replicas it propogates "writes" to. Should the replicas detect leader failure, they initiate leader election and one assumes the new leadership role. The client only connects with the load balancer. Should the load balancer fail, a backup load balancer takes its place and connects with the client and begins routing to the leader.
 
 ## Installation
 
@@ -48,90 +48,6 @@ src/
 
 ## Running the Application
 
-### Running the Backend Server
-
-#### Option 1 (recommended): docker compose
-
-```bash
-# cd src
-docker-compose up --build -d    
-```
-docker-compose
-To test killing and individual service
-
-```bash
-# Kill a specific replica
-docker-compose stop replica1
-docker-compose rm -f replica1
-
-# Kill the server
-docker-compose stop server
-docker-compose rm -f server
-
-# restart the service (not functional right now)
-docker-compose up -d --no-deps --build replica1
-
-# to gracefully kill the entire backend
-docker-compose down
-```
-
-#### Option 2: individual docker containers 
-```bash
-docker build -t chat-server src
-docker run -d --name chat-server -p 50051:50051 -e DB_FILE=/data/chat_app.db -v $(pwd)/data/server:/data chat-app python server.py --port 50051 --replicas replica1:50052,replica2:50053
-docker run -d --name chat-replica1 -p 50052:50052 -e DB_FILE=/data/replica1_chat_app1.db -v $(pwd)/data/replica1:/data chat-app python replica_server.py --port 50052 --replica-id 1
-docker run -d --name chat-replica2 -p 50053:50053 -e DB_FILE=/data/replica2_chat_app2.db -v $(pwd)/data/replica2:/data chat-app python replica_server.py --port 50053 --replica-id 2
-```
-
-#### Option 3: running scripts
-Run the following command to start the backend server:
-
-```bash
-# Then start the main server, using localhost for replica addresses
-python src/load_balancer.py --lb_host 0.0.0.0 --lb_port 50051 --replica_endpoints localhost:50052,localhost:50053
-python src/server.py --port 50051 --replicas localhost:50052,localhost:50053
-# Start the replica servers first
-python src/replica_server.py --port 50052 --db-file replica1_chat_app1.db --replica-id 1  --replicas localhost:50052,localhost:50053
-python src/replica_server.py --port 50053 --db-file replica1_chat_app2.db --replica-id 2 --replicas localhost:50052,localhost:50053
-# can add other replicas if needed
-
-```
-
-
-### Launching the Frontend
-
-To launch the chat application with a graphical interface, run:
-
-```bash
-python src/frontend.py
-
-```
-
-The frontend uses Tkinter to provide a GUI for chat registration, login, and message handling. It connects to the backend server for real-time communication. 
-
-### Compiling `.proto` Files into Python Code
-
-To generate Python code from a Protocol Buffers (`.proto`) file, use the `protoc` compiler. Ensure you have the Protocol Buffers compiler installed. Run the following command from the root directory of your project:
-
-```bash
-python -m grpc_tools.protoc -I=src/configs --python_out=src --grpc_python_out=src src/configs/protocols.proto
-python -m grpc_tools.protoc -I=src/configs --python_out=src --grpc_python_out=src src/configs/replica.proto
-```
-This will generate two files:
-
-
-Ensure the generated files are placed in the correct src/ directory for use in your application.
-
-## Testing 
-To test this code, run pytest from the src directory.
-
-Example command: 
-`python -m pytest tests/ -s -vv --cov=./`
-
-Optionally, you can specify where your config file is by prefixing your pytest command with `PROTOCOL_FILE="./configs/protocol.json" pytest ...`, but the default location is `src/configs/protocol.json`. This is helpful if you need to run the tests from the root directory or elsewhere in the project. 
-
-## Running on Multiple Devices
-
 You can run the application on multiple machines. Follow these steps:
 
 ### Prerequisites
@@ -161,36 +77,50 @@ On the **server computer**, open **Command Prompt (Windows)** or **Terminal (Mac
     
     ```
     
+### Step 2: Running the Backend Server
 
-#### Step 2: Run `server.py` with the Server’s IP
+Here's an example two machine set up to test two fault tolerance. Replace 10.111.111.111 and 10.222.22.222 with your two ip addresses as described below. For each line, run in a separate terminal. 
 
-Run server specifying your address. Technically, this behavior should be enabled by default but specifying the IP address and port explicitly makes it clear. 
+Machine 1
+```bash
+python src/load_balancer.py --lb_host 10.222.22.222 --lb_port 50055 --replica_endpoints 10.111.111.111:50052,10.111.111.111:50053,10.222.22.222:50056
+python src/replica_server.py --port 50056 --db-file replica_chat_app3.db --replica-id 3 --replicas 10.111.111.111:50052,10.111.111.111:50053,10.222.22.222:50056 --external-host 10.222.22.222
+
+```
+
+Machine 2: 
+```bash
+python src/load_balancer.py --lb_host 10.111.111.111 --lb_port 50050 --replica_endpoints 10.111.111.111:50052,10.111.111.111:50053,10.222.22.222:50056
+python src/load_balancer.py --lb_host 10.111.111.111 --lb_port 50054 --replica_endpoints 10.111.111.111:50052,10.111.111.111:50053,10.222.22.222:50056
+python src/replica_server.py --port 50052 --db-file replica_chat_app1.db --replica-id 1 --replicas 10.111.111.111:50052,10.111.111.111:50053,10.222.22.222:50056 --external-host 10.111.111.111
+python src/replica_server.py --port 50053 --db-file replica_chat_app2.db --replica-id 2 --replicas 10.111.111.111:50052,10.111.111.111:50053,10.222.22.222:50056 --external-host 10.111.111.111
+```
+
+### Step 3: Spin up the front end
+
+Run the frontend on either machine like so:
+```bash
+python src/frontend.py --lb_addresses 10.111.111.111:50050,10.111.111.111:50054,10.222.22.222:50055
+```
+
+The frontend uses Tkinter to provide a GUI for chat registration, login, and message handling. It connects to the backend server for real-time communication. 
+
+### Compiling `.proto` Files into Python Code
+
+To generate Python code from a Protocol Buffers (`.proto`) file, use the `protoc` compiler. Ensure you have the Protocol Buffers compiler installed. Run the following command from the root directory of your project:
 
 ```bash
-python src/server.py --host 172.11.11.1 --port 50051 --intercept
+python -m grpc_tools.protoc -I=src/configs --python_out=src --grpc_python_out=src src/configs/protocols.proto
+python -m grpc_tools.protoc -I=src/configs --python_out=src --grpc_python_out=src src/configs/replica.proto
 ```
 
-#### Step 3: Run `client.py` with the Server’s IP specified
+## Testing 
+To test this code, run pytest from the src directory.
 
-On each **client computer**, run:
-
-```bash 
-python src/frontend.py --host 172.11.11.1 --port 50051 --intercept
-```
-Where 172.11.11.1 is the server's IP address. 
+Example command: 
+`python -m pytest tests/ -s -vv --cov=./`
 
 ## Engineering notebook: 
 
-https://docs.google.com/document/d/1uck1DvlR-E-yDYn41MySBpTcRAgNvV6-UusJmBGb9u4/edit?usp=sharing
+https://docs.google.com/document/d/1XtN9PWlmSSK0f0TxztJz-o9uITRXeMGyJY-8FtfzTec/edit?usp=sharing
 
-
-
-python src/load_balancer.py --lb_host 0.0.0.0 --lb_port 50050 --replica_endpoints localhost:50052,localhost:50053,localhost:50056
-python src/load_balancer.py --lb_host 0.0.0.0 --lb_port 50054 --replica_endpoints localhost:50052,localhost:50053,localhost:50056
-python src/load_balancer.py --lb_host 0.0.0.0 --lb_port 50055 --replica_endpoints localhost:50052,localhost:50053,localhost:50056
-
-python src/replica_server.py --port 50052 --db-file replica1_chat_app1.db --replica-id 1 --replicas localhost:50052,localhost:50053,localhost:50056
-python src/replica_server.py --port 50053 --db-file replica1_chat_app2.db --replica-id 2 --replicas localhost:50052,localhost:50053,localhost:50056
-python src/replica_server.py --port 50056 --db-file replica1_chat_app3.db --replica-id 3 --replicas localhost:50052,localhost:50053,localhost:50056
-
-python src/frontend.py --lb_addresses localhost:50050,localhost:50054,localhost:50055
